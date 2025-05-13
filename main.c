@@ -10,18 +10,11 @@ int main(void){
 
     int circlePositionX =  screenWidth / 2;
     int circlePositionY =  screenHeight / 2;
-    int circleRadius = 50;
+    int circleRadius = 25;
 
-    int velocity = 10;
+    int velocity = 5;
 
-    Color circleColor = RED;
-
-    int isInsideArena(int x, int y){
-        if(x <= screenWidth ||  x >= 0){
-            return 0 
-        }else if()
-
-    }
+    Color circleColor = BLACK;
 
     while( ! WindowShouldClose()){
         BeginDrawing();
@@ -31,7 +24,6 @@ int main(void){
             if(IsKeyDown(KEY_RIGHT)){
                 circlePositionX += velocity;
             }
-
             
             if(IsKeyDown(KEY_LEFT)){
                 circlePositionX -= velocity;
