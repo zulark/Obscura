@@ -15,5 +15,6 @@
 #include <stdlib.h>
 #include <time.h>
 #include "player.h"
+#include "projectile.h"
 
 #endif // MAIN_H

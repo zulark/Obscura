@@ -9,6 +9,8 @@ Player InitPlayer(float startX, float startY)
     player.size = (Vector2){30.0f, 30.0f};
     player.speed = 200.0f;
     player.color = MAROON;
+    player.shootCooldown = 0.5f;
+    player.shootTimer = 0.0;
     return player;
 }
 
@@ -41,4 +43,21 @@ void UpdatePlayer(Player *player){
 
 void DrawPlayer(Player player){
     DrawRectangleV(player.position, player.size, player.color);
+}
+
+void PlayerTryShoot(Player *player, Projectile projectiles[]){
+    if(player->shootTimer>0) player->shootTimer -= GetFrameTime();
+
+    if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) && player->shootTimer <= 0){
+        player->shootTimer = player->shootCooldown;
+        Vector2 targetPosition = GetMousePosition();
+
+        for(int i = 0; i < MAX_PROJECTILES; i++){
+            if(!projectiles[i].active){
+                ShootProjectile(projectiles, i, player->position, targetPosition);
+                projectiles[i].color = SKYBLUE;
+                break;
+            }
+        }
+    }
 }
