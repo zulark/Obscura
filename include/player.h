@@ -36,7 +36,7 @@ void PlayerGainXP(Player *player, int xp);
 
 void PlayerLevelUp(Player *player);
 
-void PlayerTryShoot(Player *player, Projectile projectiles[]);
+void PlayerTryShoot(Player *player, Projectile projectiles[], Camera2D camera);
 
 #endif
 

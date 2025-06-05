@@ -199,7 +199,7 @@ int main()
             DrawRectangle(0, 0, WORLD_WIDTH, WORLD_HEIGHT, Fade(LIGHTGRAY, 0.5f));
             DrawPlayer(player);
             UpdatePlayer(&player);
-            PlayerTryShoot(&player, projectiles);
+            PlayerTryShoot(&player, projectiles, camera);
             for (int i = 0; i < MAX_PROJECTILES; i++)
                 UpdateProjectile(&projectiles[i]);
 

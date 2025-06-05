@@ -56,7 +56,7 @@ void HandlePlayerInput(Player *player)
         player->position.x = WORLD_WIDTH - player->size.x;
 }
 
-void PlayerTryShoot(Player *player, Projectile projectiles[])
+void PlayerTryShoot(Player *player, Projectile projectiles[], Camera2D camera)
 {
     if (player->shootTimer > 0)
         player->shootTimer -= GetFrameTime();
@@ -66,8 +66,9 @@ void PlayerTryShoot(Player *player, Projectile projectiles[])
         if (player->shootTimer <= 0)
         {
             player->shootTimer = player->shootCooldown;
-            Vector2 targetPosition = GetMousePosition();
-            // shoot from middle of player sprite
+            // Corrige para pegar a posição do mouse no mundo, não na tela
+            Vector2 mouseScreen = GetMousePosition();
+            Vector2 targetPosition = GetScreenToWorld2D(mouseScreen, camera);
             Vector2 shootPosition = {player->position.x + player->size.x / 2, player->position.y + player->size.y / 2};
             for (int i = 0; i < MAX_PROJECTILES; i++)
             {

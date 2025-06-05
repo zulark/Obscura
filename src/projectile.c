@@ -20,6 +20,8 @@ void ShootProjectile(Projectile projectiles[], int projectileIndex, Vector2 star
     projectiles[projectileIndex].position = startPosition;
     projectiles[projectileIndex].active = true;
     projectiles[projectileIndex].damage = 5;
+    projectiles[projectileIndex].speed = 450.0f; // Garante velocidade correta
+    projectiles[projectileIndex].radius = 10.0f; // Raio menor para melhor precisão
 
     Vector2 direction = Vector2Subtract(targetPosition, startPosition);
     direction = Vector2Normalize(direction);
@@ -37,9 +39,9 @@ void UpdateProjectile(Projectile  *projectile){
     projectile->position.y += projectile->velocity.y * GetFrameTime();
     
     if (projectile->position.x < 0 - projectile->radius || 
-        projectile->position.x > screenWidth + projectile->radius ||
+        projectile->position.x > WORLD_WIDTH + projectile->radius ||
         projectile->position.y < 0 - projectile->radius || 
-        projectile->position.y > screenHeight + projectile->radius) {
+        projectile->position.y > WORLD_HEIGHT + projectile->radius) {
         projectile->active = false;
     }
 }
