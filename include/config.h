@@ -17,5 +17,7 @@
 #include "projectile.h"
 #include "enemy.h"
 
+#define WORLD_WIDTH 3000
+#define WORLD_HEIGHT 3000
 
 #endif

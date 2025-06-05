@@ -41,19 +41,19 @@ void HandlePlayerInput(Player *player)
     if (direction.x != 0.0f || direction.y != 0.0f)
     {
         direction = Vector2Normalize(direction);
-
         player->position.x += direction.x * player->speed * dt;
         player->position.y += direction.y * player->speed * dt;
     }
 
+    // Limita o jogador dentro do mundo maior
     if (player->position.y < 0)
         player->position.y = 0;
-    if (player->position.y + player->size.y > screenHeight)
-        player->position.y = screenHeight - player->size.y;
+    if (player->position.y + player->size.y > WORLD_HEIGHT)
+        player->position.y = WORLD_HEIGHT - player->size.y;
     if (player->position.x < 0)
         player->position.x = 0;
-    if (player->position.x + player->size.x > screenWidth)
-        player->position.x = screenWidth - player->size.x;
+    if (player->position.x + player->size.x > WORLD_WIDTH)
+        player->position.x = WORLD_WIDTH - player->size.x;
 }
 
 void PlayerTryShoot(Player *player, Projectile projectiles[])

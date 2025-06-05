@@ -1,17 +1,15 @@
 /*******************************************************************************************
  *
- *   OBSCURA - V0.2
+ *   OBSCURA - V0.2.1
  *
  *   Funcionalidades:
- *     - Inimigos com diferentes tipos, atributos e raridade de spawn
- *     - Sistema de colisão entre projéteis e inimigos
- *     - Sistema de experiência, níveis e pontos de habilidade do jogador
- *     - HUD mostrando vida, XP, nível e pontos de habilidade
- *     - Cooldown de tiro para o jogador
- *     - Menus: principal, pausa e game over, com transições suaves
- *     - Fundo animado de estrelas
+ *   - Aumentado a área andável do mundo
+ *   - Adicionado sistema de spawn de inimigos fora da área andável
+ *   - Grid de debug na área andável
+
  ********************************************************************************************/
 #include <config.h>
+#include "raylib.h"
 
 typedef enum GameState
 {
@@ -52,7 +50,7 @@ void DrawHUD(Player *player)
 
 void ResetGame(Player *player, Enemy enemies[], Projectile projectiles[])
 {
-    *player = InitPlayer(screenWidth / 2.0f, screenHeight / 2.0f);
+    *player = InitPlayer(WORLD_WIDTH / 2.0f, WORLD_HEIGHT / 2.0f);
 
     for (int i = 0; i < MAX_ENEMIES; i++)
     {
@@ -83,7 +81,7 @@ int main()
     InitWindow(screenWidth, screenHeight, gameName);
     SetTargetFPS(60);
 
-    Player player = InitPlayer(screenWidth / 2.0f, screenHeight / 2.0f);
+    Player player = InitPlayer(WORLD_WIDTH / 2.0f, WORLD_HEIGHT / 2.0f);
 
     Projectile projectiles[MAX_PROJECTILES];
     InitProjectiles(projectiles, MAX_PROJECTILES);
@@ -95,11 +93,27 @@ int main()
     for (int i = 0; i < 100; i++)
         stars[i] = (Vector2){GetRandomValue(0, screenWidth), GetRandomValue(0, screenHeight)};
 
+    Camera2D camera = {0};
+    camera.target = player.position;
+    camera.offset = (Vector2){screenWidth/2.0f, screenHeight/2.0f};
+    camera.rotation = 0.0f;
+    camera.zoom = 1.0f;
+
     while (!WindowShouldClose())
     {
         UpdateMusicStream(menuMusic);
+        // Centraliza a câmera no jogador, mas limita para não mostrar fora do mundo
+        float camX = player.position.x + player.size.x/2;
+        float camY = player.position.y + player.size.y/2;
+        float halfScreenW = screenWidth / 2.0f;
+        float halfScreenH = screenHeight / 2.0f;
+        // Limita a câmera para não mostrar fora do mundo
+        if (camX < halfScreenW) camX = halfScreenW;
+        if (camY < halfScreenH) camY = halfScreenH;
+        if (camX > WORLD_WIDTH - halfScreenW) camX = WORLD_WIDTH - halfScreenW;
+        if (camY > WORLD_HEIGHT - halfScreenH) camY = WORLD_HEIGHT - halfScreenH;
+        camera.target = (Vector2){camX, camY};
         BeginDrawing();
-
         switch (gameState)
         {
         case GAME_MENU:
@@ -168,12 +182,24 @@ int main()
 
         case GAME_IS_PLAYING:
             StopMusicStream(menuMusic);
-            DrawPlayer(player);
             ClearBackground(DARKGRAY);
+            BeginMode2D(camera);
+            // Desenha um grid de debug na área andável
+            int gridSize = 200;
+            Color gridColor = Fade(MAROON, 0.5f);
+            for (int x = 0; x <= WORLD_WIDTH; x += gridSize) {
+                DrawLine(x, 0, x, WORLD_HEIGHT, gridColor);
+                DrawText(TextFormat("%d", x), x + 4, 4, 18, gridColor);
+            }
+            for (int y = 0; y <= WORLD_HEIGHT; y += gridSize) {
+                DrawLine(0, y, WORLD_WIDTH, y, gridColor);
+                DrawText(TextFormat("%d", y), 4, y + 4, 18, gridColor);
+            }
+            // Desenha o limite do mundo andável
+            DrawRectangle(0, 0, WORLD_WIDTH, WORLD_HEIGHT, Fade(LIGHTGRAY, 0.5f));
+            DrawPlayer(player);
             UpdatePlayer(&player);
             PlayerTryShoot(&player, projectiles);
-            DrawHUD(&player);
-
             for (int i = 0; i < MAX_PROJECTILES; i++)
                 UpdateProjectile(&projectiles[i]);
 
@@ -183,23 +209,22 @@ int main()
             {
                 enemySpawnTimer = 0.0f;
                 Vector2 spawnPos;
-                // randomiza o spawn nos 4 cantos
+                // Spawna inimigos fora da área andável
                 int edge = GetRandomValue(0, 3);
                 switch (edge) {
-                    case 0: //topo
-                        spawnPos = (Vector2){ (float)GetRandomValue(0, screenWidth), -50.0f };
+                    case 0: // topo
+                        spawnPos = (Vector2){ (float)GetRandomValue(0, WORLD_WIDTH), -60.0f };
                         break;
-                    case 1: //base
-                        spawnPos = (Vector2){ (float)GetRandomValue(0, screenWidth), (float)screenHeight + 50.0f };
+                    case 1: // base
+                        spawnPos = (Vector2){ (float)GetRandomValue(0, WORLD_WIDTH), WORLD_HEIGHT + 10.0f };
                         break;
-                    case 2: //esquerda
-                        spawnPos = (Vector2){ -50.0f, (float)GetRandomValue(0, screenHeight) };
+                    case 2: // esquerda
+                        spawnPos = (Vector2){ -60.0f, (float)GetRandomValue(0, WORLD_HEIGHT) };
                         break;
-                    case 3: //direita
-                        spawnPos = (Vector2){ (float)screenWidth + 50.0f, (float)GetRandomValue(0, screenHeight) };
+                    case 3: // direita
+                        spawnPos = (Vector2){ WORLD_WIDTH + 10.0f, (float)GetRandomValue(0, WORLD_HEIGHT) };
                         break;
                 }
-
                 int chanceToSpawn = GetRandomValue(1, 100);
                 EnemyType typeToSpawn;
                 if (chanceToSpawn <= 70) {
@@ -276,6 +301,8 @@ int main()
             for (int i = 0; i < MAX_ENEMIES; i++)
                 if (enemies[i].active)
                     DrawEnemy(enemies[i]);
+            EndMode2D();
+            DrawHUD(&player);
 
             // alterações do gamestate no loop do jogo
             if (player.alive == false)
@@ -305,7 +332,6 @@ int main()
             break;
         }
         EndDrawing();
-
     } // Fim do while(!WindowShouldClose())
 
     UnloadMusicStream(menuMusic);
