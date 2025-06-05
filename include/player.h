@@ -2,6 +2,8 @@
 #define PLAYER_H
 #include "raylib.h"
 #include "projectile.h"
+#include "enemy.h"
+#include "particle.h"
 
 typedef struct Player {
     Vector2 position;
@@ -19,6 +21,9 @@ typedef struct Player {
     float shootCooldown;
     float shootTimer;
     float invencibilityTimer;
+    float levelUpTextTimer; // Tempo restante para mostrar o texto de level up
+    float levelUpArcTimer;  // Tempo restante para mostrar o arco azul
+    float levelUpArcProgress; // Progresso do arco (0.0 a 1.0)
     // struct SkillTree *skills; // Para integração futura
 } Player;
 
@@ -32,11 +37,13 @@ void DrawPlayer(Player player);
 
 void TakeDamagePlayer(Player *player, int damageDealt);
 
-void PlayerGainXP(Player *player, int xp);
+void PlayerGainXP(Player *player, int xp, Enemy enemies[], int maxEnemies, Particle particles[], int maxParticles);
 
-void PlayerLevelUp(Player *player);
+void PlayerLevelUp(Player *player, Enemy enemies[], int maxEnemies, Particle particles[], int maxParticles);
 
 void PlayerTryShoot(Player *player, Projectile projectiles[], Camera2D camera);
+
+void DrawPlayerLevelUpEffects(Player *player);
 
 #endif
 

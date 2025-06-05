@@ -1,5 +1,7 @@
 #include "player.h"
+#include "enemy.h"
 #include "config.h"
+#include "particle.h"
 #include <raylib.h>
 
 Player InitPlayer(float startX, float startY)
@@ -20,6 +22,9 @@ Player InitPlayer(float startX, float startY)
     player.shootCooldown = 0.35f;
     player.shootTimer = 0.0;
     player.invencibilityTimer = 0.0f;
+    player.levelUpTextTimer = 0.0f;
+    player.levelUpArcTimer = 0.0f;
+    player.levelUpArcProgress = 0.0f;
     // player.sprite = LoadTexture("assets/sprites/player.png");
     return player;
 }
@@ -117,6 +122,21 @@ void UpdatePlayer(Player *player)
             player->invencibilityTimer = 0.0f;
         }
     }
+
+    // Atualiza timers de level up
+    if (player->levelUpTextTimer > 0.0f) {
+        player->levelUpTextTimer -= dt;
+        if (player->levelUpTextTimer < 0.0f) player->levelUpTextTimer = 0.0f;
+    }
+    if (player->levelUpArcTimer > 0.0f) {
+        player->levelUpArcTimer -= dt;
+        // Progresso de 0.0 a 1.0
+        player->levelUpArcProgress = 1.0f - (player->levelUpArcTimer / 0.7f);
+        if (player->levelUpArcTimer < 0.0f) {
+            player->levelUpArcTimer = 0.0f;
+            player->levelUpArcProgress = 0.0f;
+        }
+    }
 }
 
 void DrawPlayer(Player player)
@@ -147,24 +167,67 @@ void DrawPlayer(Player player)
     // }
 }
 
-void PlayerGainXP(Player *player, int xp)
+void PlayerGainXP(Player *player, int xp, Enemy enemies[], int maxEnemies, Particle particles[], int maxParticles)
 {
     player->experience += xp;
-    int xpToNextLevel = 100 + (player->level - 1) * 50;
+    int xpToNextLevel = 50 + (player->level - 1) * 50;
     // Ganha níveis enquanto tiver XP suficiente
     while (player->experience >= xpToNextLevel)
     {
         player->experience -= xpToNextLevel;
-        PlayerLevelUp(player);
-        xpToNextLevel = 100 + (player->level - 1) * 50;
+        PlayerLevelUp(player, enemies, maxEnemies, particles, maxParticles);
+        xpToNextLevel = 50 + (player->level - 1) * 50;
     }
 }
 
-void PlayerLevelUp(Player *player){
+void PlayerLevelUp(Player *player, Enemy enemies[], int maxEnemies, Particle particles[], int maxParticles){
+    (void)maxParticles; // Evita warning de parâmetro não usado
     player->level++;
     player->maxHealth += 10 * player->level;
     player->health = player->maxHealth;
     player->skillPoints++;
+    player->invencibilityTimer = 2.0f; // 2 segundos de invencibilidade
+    // Ataque circular: mata todos inimigos próximos
+    float killRadius = 350.0f;
+    for (int i = 0; i < maxEnemies; i++) {
+        if (enemies[i].active) {
+            float dist = Vector2Distance(player->position, enemies[i].position);
+            if (dist < killRadius) {
+                enemies[i].health = 0;
+                enemies[i].active = false;
+            }
+        }
+    }
+    player->levelUpTextTimer = 1.5f; // 1.5 segundos de texto
+    player->levelUpArcTimer = 0.7f;  // 0.7 segundos de arco
+    player->levelUpArcProgress = 0.0f;
+    // Efeito de partículas mágicas removido daqui
     // Aqui pode-se adicionar lógica para desbloquear habilidades
+}
+
+void DrawPlayerLevelUpEffects(Player *player) {
+    // Arco azul
+    if (player->levelUpArcTimer > 0.0f) {
+        float centerX = player->position.x + player->size.x/2;
+        float centerY = player->position.y + player->size.y/2;
+        float minRadius = player->size.x * 0.7f;
+        float maxRadius = player->size.x * 1.7f;
+        float radius = minRadius + (maxRadius - minRadius) * player->levelUpArcProgress;
+        int arcCount = 3;
+        for (int i = 0; i < arcCount; i++) {
+            float startAngle = 120.0f * i + player->levelUpArcProgress * 60.0f;
+            DrawRing((Vector2){centerX, centerY}, radius, radius+6, startAngle, startAngle+60, 64, Fade(BLUE, 180));
+        }
+    }
+    // Texto
+    if (player->levelUpTextTimer > 0.0f) {
+        float alpha = (player->levelUpTextTimer > 0.3f) ? 1.0f : player->levelUpTextTimer / 0.3f;
+        int fontSize = 32;
+        const char* txt = "LEVEL UP!";
+        int textWidth = MeasureText(txt, fontSize);
+        float centerX = player->position.x + player->size.x/2;
+        float y = player->position.y - 32 - (1.0f - alpha) * 20.0f;
+        DrawText(txt, (int)(centerX - textWidth/2), (int)y, fontSize, Fade(SKYBLUE, (unsigned char)(255*alpha)));
+    }
 }
 

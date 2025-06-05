@@ -10,6 +10,7 @@
  ********************************************************************************************/
 #include <config.h>
 #include "raylib.h"
+#include "particle.h"
 
 typedef enum GameState
 {
@@ -40,7 +41,17 @@ void DrawHUD(Player *player)
     int textWidth = MeasureText(hpText, 16);
     DrawText(hpText, x + (barWidth - textWidth) / 2, y + 4, 16, WHITE);
 
-    DrawText(TextFormat("XP: %d  |  Lv. %d", player->experience, player->level), x, y + 40, 18, GREEN);
+    // Barra de XP
+    int xpBarY = y + 30;
+    int xpBarHeight = 12;
+    int xpBarWidth = barWidth;
+    int xpToNextLevel = 100 + (player->level - 1) * 50;
+    float xpPercent = (float)player->experience / xpToNextLevel;
+    DrawRectangle(x + 2, xpBarY + 2, xpBarWidth, xpBarHeight, Fade(BLACK, 0.4f));
+    DrawRectangleRounded((Rectangle){x, xpBarY, xpBarWidth * xpPercent, xpBarHeight}, 0.3f, 10, GREEN);
+    DrawRectangleRoundedLines((Rectangle){x, xpBarY, xpBarWidth, xpBarHeight}, 0.3f, 10, Fade(WHITE, 0.3f));
+    DrawText(TextFormat("XP: %d / %d", player->experience, xpToNextLevel), x + 8, xpBarY - 2, 12, WHITE);
+
     DrawText(TextFormat("Pontos de habilidade: %d", player->skillPoints), x, y + 65, 18, YELLOW);
 
     // FPS no canto
@@ -88,6 +99,9 @@ int main()
 
     Enemy enemies[MAX_ENEMIES];
     InitEnemies(enemies, MAX_ENEMIES);
+
+    Particle particles[MAX_PARTICLES];
+    InitParticles(particles, MAX_PARTICLES);
 
     Vector2 stars[100];
     for (int i = 0; i < 100; i++)
@@ -182,11 +196,11 @@ int main()
 
         case GAME_IS_PLAYING:
             StopMusicStream(menuMusic);
-            ClearBackground(DARKGRAY);
+            ClearBackground(LIGHTGRAY);
             BeginMode2D(camera);
             // Desenha um grid de debug na área andável
             int gridSize = 200;
-            Color gridColor = Fade(MAROON, 0.5f);
+            Color gridColor = Fade(BLACK, 0.5f);
             for (int x = 0; x <= WORLD_WIDTH; x += gridSize) {
                 DrawLine(x, 0, x, WORLD_HEIGHT, gridColor);
                 DrawText(TextFormat("%d", x), x + 4, 4, 18, gridColor);
@@ -195,9 +209,8 @@ int main()
                 DrawLine(0, y, WORLD_WIDTH, y, gridColor);
                 DrawText(TextFormat("%d", y), 4, y + 4, 18, gridColor);
             }
-            // Desenha o limite do mundo andável
-            DrawRectangle(0, 0, WORLD_WIDTH, WORLD_HEIGHT, Fade(LIGHTGRAY, 0.5f));
             DrawPlayer(player);
+            DrawPlayerLevelUpEffects(&player);
             UpdatePlayer(&player);
             PlayerTryShoot(&player, projectiles, camera);
             for (int i = 0; i < MAX_PROJECTILES; i++)
@@ -266,7 +279,7 @@ int main()
                             {
                                 TakeDamageEnemy(&enemies[j], projectiles[i].damage);
                                 if (!enemies[j].active && enemies[j].health <= 0) {
-                                    PlayerGainXP(&player, enemies[j].xpReward);
+                                    PlayerGainXP(&player, enemies[j].xpReward, enemies, MAX_ENEMIES, particles, MAX_PARTICLES);
                                 }
                                 projectiles[i].active = false;
                                 break;
@@ -294,6 +307,9 @@ int main()
                     }
                 }
             }
+
+            UpdateParticles(particles, MAX_PARTICLES);
+            DrawParticles(particles, MAX_PARTICLES); // Desenha partículas dentro do mundo, acima dos inimigos
 
             for (int i = 0; i < MAX_PROJECTILES; i++)
                 DrawProjectile(projectiles[i]);
