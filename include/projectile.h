@@ -7,8 +7,10 @@
 typedef struct Projectile {
     Vector2 position;
     Vector2 velocity;
+    Texture2D texture;
     float radius;
     float speed;
+    int damage;
     bool active;
     Color color;
 } Projectile;
