@@ -3,6 +3,7 @@
 #include "config.h"
 #include "particle.h"
 #include <raylib.h>
+#include "audio.h"
 
 Player InitPlayer(float startX, float startY)
 {
@@ -66,7 +67,7 @@ void PlayerTryShoot(Player *player, Projectile projectiles[], Camera2D camera)
     if (player->shootTimer > 0)
         player->shootTimer -= GetFrameTime();
 
-    if (IsKeyPressed(KEY_SPACE) || IsKeyDown(KEY_SPACE))
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) || IsMouseButtonDown(MOUSE_BUTTON_LEFT))
     {
         if (player->shootTimer <= 0)
         {
@@ -80,7 +81,9 @@ void PlayerTryShoot(Player *player, Projectile projectiles[], Camera2D camera)
                 if (!projectiles[i].active)
                 {
                     ShootProjectile(projectiles, i, shootPosition, targetPosition);
-                    projectiles[i].color = SKYBLUE;
+                    projectiles[i].color = DARKPURPLE;
+                    AudioSetSoundVolume(SOUND_SHOOT, 0.6f);
+                    AudioPlaySound(SOUND_SHOOT);
                     break;
                 }
             }
@@ -101,7 +104,7 @@ void TakeDamagePlayer(Player *player, int damageAmount)
         player->health -= damageAmount;
         player->invencibilityTimer = 1.0f;
         TraceLog(LOG_INFO, "JOGADOR tomou %d de dano, vida: %d/%d", damageAmount, player->health, player->maxHealth);
-
+        AudioPlaySound(SOUND_PLAYER_HIT);
         if (player->health <= 0)
         {
             player->alive = false;
@@ -167,7 +170,7 @@ void DrawPlayer(Player player)
     // }
 }
 
-void PlayerGainXP(Player *player, int xp, Enemy enemies[], int maxEnemies, Particle particles[], int maxParticles)
+void PlayerGainXP(Player *player, int xp, Enemy enemies[], int maxEnemies)
 {
     player->experience += xp;
     int xpToNextLevel = 50 + (player->level - 1) * 50;
@@ -175,19 +178,17 @@ void PlayerGainXP(Player *player, int xp, Enemy enemies[], int maxEnemies, Parti
     while (player->experience >= xpToNextLevel)
     {
         player->experience -= xpToNextLevel;
-        PlayerLevelUp(player, enemies, maxEnemies, particles, maxParticles);
+        PlayerLevelUp(player, enemies, maxEnemies);
         xpToNextLevel = 50 + (player->level - 1) * 50;
     }
 }
 
-void PlayerLevelUp(Player *player, Enemy enemies[], int maxEnemies, Particle particles[], int maxParticles){
-    (void)maxParticles; // Evita warning de parâmetro não usado
+void PlayerLevelUp(Player *player, Enemy enemies[], int maxEnemies){
     player->level++;
     player->maxHealth += 10 * player->level;
     player->health = player->maxHealth;
     player->skillPoints++;
     player->invencibilityTimer = 2.0f; // 2 segundos de invencibilidade
-    // Ataque circular: mata todos inimigos próximos
     float killRadius = 350.0f;
     for (int i = 0; i < maxEnemies; i++) {
         if (enemies[i].active) {
@@ -195,14 +196,15 @@ void PlayerLevelUp(Player *player, Enemy enemies[], int maxEnemies, Particle par
             if (dist < killRadius) {
                 enemies[i].health = 0;
                 enemies[i].active = false;
+                AudioPlaySound(SOUND_ENEMY_DEATH);
             }
         }
     }
     player->levelUpTextTimer = 1.5f; // 1.5 segundos de texto
     player->levelUpArcTimer = 0.7f;  // 0.7 segundos de arco
     player->levelUpArcProgress = 0.0f;
-    // Efeito de partículas mágicas removido daqui
-    // Aqui pode-se adicionar lógica para desbloquear habilidades
+    AudioPlaySound(SOUND_LEVELUP);
+    AudioSetSoundVolume(SOUND_LEVELUP, 0.3f);
 }
 
 void DrawPlayerLevelUpEffects(Player *player) {
@@ -228,6 +230,26 @@ void DrawPlayerLevelUpEffects(Player *player) {
         float centerX = player->position.x + player->size.x/2;
         float y = player->position.y - 32 - (1.0f - alpha) * 20.0f;
         DrawText(txt, (int)(centerX - textWidth/2), (int)y, fontSize, Fade(SKYBLUE, (unsigned char)(255*alpha)));
+    }
+}
+
+void DrawHotkeyBar(int width, int height, float cooldowns[], int numSlots) {
+    int barW = 220, barH = 48;
+    int x = width/2 - barW/2, y = height - barH - 12;
+    DrawRectangleRounded((Rectangle){x, y, barW, barH}, 0.3f, 8, Fade(BLACK, 0.7f));
+    for (int i = 0; i < numSlots; i++) {
+        int slotX = x + 12 + i*70;
+        int slotY = y + 8;
+        DrawRectangleRounded((Rectangle){slotX, slotY, 48, 32}, 0.4f, 6, DARKGRAY);
+        DrawText(TextFormat("%d", i+1), slotX+4, slotY+2, 16, WHITE);
+        // Cooldown overlay
+        if (cooldowns[i] > 0.0f) {
+            float pct = cooldowns[i] / 5.0f; // Exemplo: 5s de cooldown
+            if (pct > 1.0f) pct = 1.0f;
+            int cdH = (int)(32*pct);
+            DrawRectangle(slotX, slotY + 32 - cdH, 48, cdH, Fade(GRAY, 180));
+            DrawText(TextFormat("%.1f", cooldowns[i]), slotX+16, slotY+8, 14, WHITE);
+        }
     }
 }
 

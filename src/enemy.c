@@ -1,6 +1,7 @@
 #include "enemy.h"
 #include "raymath.h"
 #include <stdlib.h>
+#include "audio.h"
 
 void InitEnemies(Enemy enemies[], int maxEnemies){
     for (int i = 0; i < maxEnemies; i++){
@@ -82,6 +83,8 @@ void TakeDamageEnemy(Enemy *enemy, int damageDealt) {
     if(enemy->health <= 0){
         enemy->health = 0;
         enemy->active = false;
+        AudioSetSoundVolume(SOUND_ENEMY_DEATH, 0.3f);
+        AudioPlaySound(SOUND_ENEMY_DEATH);
     }
 }
 

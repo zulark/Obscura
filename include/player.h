@@ -37,13 +37,15 @@ void DrawPlayer(Player player);
 
 void TakeDamagePlayer(Player *player, int damageDealt);
 
-void PlayerGainXP(Player *player, int xp, Enemy enemies[], int maxEnemies, Particle particles[], int maxParticles);
+void PlayerGainXP(Player *player, int xp, Enemy enemies[], int maxEnemies);
 
-void PlayerLevelUp(Player *player, Enemy enemies[], int maxEnemies, Particle particles[], int maxParticles);
+void PlayerLevelUp(Player *player, Enemy enemies[], int maxEnemies);
 
 void PlayerTryShoot(Player *player, Projectile projectiles[], Camera2D camera);
 
 void DrawPlayerLevelUpEffects(Player *player);
+
+void DrawHotkeyBar(int width, int height, float cooldowns[], int numSlots);
 
 #endif
 

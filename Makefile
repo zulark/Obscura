@@ -1,7 +1,7 @@
 # Makefile Completo e Organizado
 
 # Nome do seu executável (sem a extensão .exe)
-TARGET_EXEC := obscura
+TARGET_EXEC := Obscura
 
 # --- Compilador e Flags ---
 CC := gcc
@@ -46,17 +46,22 @@ OBJECTS := $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(SOURCES))
 # Define o caminho completo para o executável final
 EXECUTABLE := $(BIN_DIR)/$(TARGET_EXEC).exe
 
+# Arquivo de recursos do Windows (ícone, versão, etc)
+RES_FILE := resource.res
+
+
+
 # --- Regras ---
 
 # Regra padrão (o que acontece quando você digita apenas 'make')
 all: $(EXECUTABLE)
 
 # Regra para criar o executável
-$(EXECUTABLE): $(OBJECTS)
+$(EXECUTABLE): $(OBJECTS) $(RES_FILE)
 	@mkdir -p $(BIN_DIR) # Cria a pasta bin/ se não existir
 	@echo "Modo de Build: $(BUILD_MODE_MSG)"
 	@echo "Linkando para criar $(EXECUTABLE)..."
-	$(CC) $(OBJECTS) -o $@ $(LDFLAGS) $(LDLIBS)
+	$(CC) $(OBJECTS) $(RES_FILE) -o $@ $(LDFLAGS) $(LDLIBS)
 	@echo "Compilação concluída! Executável: $@"
 
 # Regra para compilar arquivos .c em arquivos objeto .o

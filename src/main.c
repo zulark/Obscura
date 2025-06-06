@@ -1,16 +1,41 @@
 /*******************************************************************************************
  *
- *   OBSCURA - V0.2.1
+ *   OBSCURA - V0.4.0
  *
  *   Funcionalidades:
- *   - Aumentado a área andável do mundo
- *   - Adicionado sistema de spawn de inimigos fora da área andável
- *   - Grid de debug na área andável
-
+ *   - Mundo expandido, limites de movimentação, câmera centralizada e limitada
+ *   - Deadzone (zona morta) para suavizar o movimento da câmera
+ *   - Grid de debug com coordenadas
+ *   - Tipos de inimigos (NORMAL, FAST, STRONG) com spawn probabilístico e spawn fora da área andável
+ *   - Inimigos perseguem o centro do player
+ *   - Sistema de XP, level, skill points
+ *   - XP ao matar inimigos, barra de XP no HUD, level up aumenta atributos
+ *   - Ataque circular e invencibilidade temporária ao subir de nível
+ *   - Floating text: valor de XP ganho aparece acima do personagem
+ *   - Sistema de partículas (particle.h/.c), efeito visual ao upar, pronto para magias
+ *   - HUD mostra vida, XP, nível, skill points, FPS
+ *   - Menus de jogo, pausa, game over
+ *   - Hotkey bar de magias (slots 1,2,3), efeito visual de cooldown
+ *   - Modularização do áudio: criação de audio.h/.c, centralização dos efeitos sonoros
+ *   - Sons para tiro, dano no player, level up, morte de inimigo integrados e tocando nos eventos corretos
+ *   - Ajuste de volume e pitch via funções do módulo de áudio
+ *   - Correção da música de game over para tocar apenas uma vez
+ *   - Modularização inicial: headers e arquivos fonte para áudio, magias, UI/HUD
+ *   - Limpeza de código, remoção de warnings, atualização de comentários
+ *   - Ajuste de colisão para alinhar visualmente player e inimigos
+ *   - Makefile ajustado para incluir resource.res (ícone do .exe)
+ *   - Orientações para exportar o executável junto com a pasta assets
+ *   - Explicação sobre falsos positivos de antivírus e assinatura digital
+ *   - Implementação de cursor customizado com Texture2D, escala ajustável e offset para centralização
+ *   - Sistema simplificado para usar apenas um sprite de cursor
+ *   - Orientação para alinhar o centro do cursor à posição do mouse
+ *
  ********************************************************************************************/
 #include <config.h>
 #include "raylib.h"
 #include "particle.h"
+#include "audio.h"
+#include "cursor.h"
 
 typedef enum GameState
 {
@@ -20,7 +45,6 @@ typedef enum GameState
     GAME_OVER
 } GameState;
 
-// Variável global de estado
 GameState gameState = GAME_MENU;
 
 void DrawHUD(Player *player)
@@ -60,7 +84,7 @@ void DrawHUD(Player *player)
 
 
 void ResetGame(Player *player, Enemy enemies[], Projectile projectiles[])
-{
+{   
     *player = InitPlayer(WORLD_WIDTH / 2.0f, WORLD_HEIGHT / 2.0f);
 
     for (int i = 0; i < MAX_ENEMIES; i++)
@@ -76,21 +100,30 @@ void ResetGame(Player *player, Enemy enemies[], Projectile projectiles[])
 }
 
 int main()
-{
+{   
     float hudAlpha = 0.0f;
     float fadeSpeed = 2.0f;
     bool transitioningToGame = false;
     float transitionAlpha = 0.0f;
 
     InitAudioDevice();
+    SetMasterVolume(1.0f);
+    AudioInit(); // Inicializa o sistema de áudio
     Music menuMusic = LoadMusicStream("assets/sounds/main_theme.mp3");
+    Music gameMusic = LoadMusicStream("assets/sounds/game_theme.mp3");
+    Music gameOverMusic = LoadMusicStream("assets/sounds/game_over.mp3");
+
     PlayMusicStream(menuMusic);
 
     float enemySpawnTimer = 0.0f;
     float enemySpawnCooldown = 1.0f;
 
     InitWindow(screenWidth, screenHeight, gameName);
+    Image icon = LoadImage("assets/icon.png");
+    SetWindowIcon(icon);
+    UnloadImage(icon);
     SetTargetFPS(60);
+    CursorInit();
 
     Player player = InitPlayer(WORLD_WIDTH / 2.0f, WORLD_HEIGHT / 2.0f);
 
@@ -113,25 +146,44 @@ int main()
     camera.rotation = 0.0f;
     camera.zoom = 1.0f;
 
+    // Deadzone para suavizar o movimento da câmera
+    const float deadzoneWidth = 64.0f;  // largura da zona morta (bem pequena)
+    const float deadzoneHeight = 32.0f;  // altura da zona morta (bem pequena)
+
     while (!WindowShouldClose())
     {
         UpdateMusicStream(menuMusic);
-        // Centraliza a câmera no jogador, mas limita para não mostrar fora do mundo
-        float camX = player.position.x + player.size.x/2;
-        float camY = player.position.y + player.size.y/2;
+        SetMusicVolume(menuMusic, 0.6f);
+        SetMusicPitch(menuMusic, 0.8f);
+        static bool gameOverMusicPlayed = false;
+        // --- DEADZONE DA CÂMERA ---
         float halfScreenW = screenWidth / 2.0f;
         float halfScreenH = screenHeight / 2.0f;
-        // Limita a câmera para não mostrar fora do mundo
+        float camX = camera.target.x;
+        float camY = camera.target.y;
+        float playerCenterX = player.position.x + player.size.x/2;
+        float playerCenterY = player.position.y + player.size.y/2;
+        // Deadzone retângulo central
+        float dzLeft = camX - deadzoneWidth/2;
+        float dzRight = camX + deadzoneWidth/2;
+        float dzTop = camY - deadzoneHeight/2;
+        float dzBottom = camY + deadzoneHeight/2;
+        // Se o player sair da deadzone, move a câmera
+        if (playerCenterX < dzLeft) camX = playerCenterX + deadzoneWidth/2;
+        if (playerCenterX > dzRight) camX = playerCenterX - deadzoneWidth/2;
+        if (playerCenterY < dzTop) camY = playerCenterY + deadzoneHeight/2;
+        if (playerCenterY > dzBottom) camY = playerCenterY - deadzoneHeight/2;
+        // Limita a câmera nas bordas do mundo
         if (camX < halfScreenW) camX = halfScreenW;
         if (camY < halfScreenH) camY = halfScreenH;
         if (camX > WORLD_WIDTH - halfScreenW) camX = WORLD_WIDTH - halfScreenW;
         if (camY > WORLD_HEIGHT - halfScreenH) camY = WORLD_HEIGHT - halfScreenH;
         camera.target = (Vector2){camX, camY};
-        BeginDrawing();
+
         switch (gameState)
         {
         case GAME_MENU:
-        {
+        {   
             ClearBackground(BLACK);
             if (hudAlpha < 1.0f)
                 hudAlpha += dt * fadeSpeed;
@@ -147,7 +199,7 @@ int main()
 
             float titleOffset = sin(GetTime() * 2) * 5; // efeito de bounce
             DrawText("OBSCURA", screenWidth / 2 - MeasureText("OBSCURA", 60) / 2, screenHeight / 2 - 100 + titleOffset, 60, Fade(PURPLE, hudAlpha));
-            DrawText("Desenvolvido por Felipe Rudnik", screenWidth / 2 - MeasureText("Desenvolvido por Felipe Rudnik", 20) / 2, screenHeight - 60, 20, Fade(DARKGRAY, hudAlpha));
+            DrawText("Desenvolvido por Felipe", screenWidth / 2 - MeasureText("Desenvolvido por Felipe", 20) / 2, screenHeight - 60, 20, Fade(DARKGRAY, hudAlpha));
 
             // --- MENU COM BOTOES ---
             static int menuSelected = 0;
@@ -158,7 +210,7 @@ int main()
 
             for (int i = 0; i < menuCount; i++)
             {
-                Color color = (i == menuSelected) ? PURPLE : GRAY;
+                Color color = (i == menuSelected) ? DARKPURPLE : GRAY;
                 int textWidth = MeasureText(menuItems[i], 30);
                 DrawText(menuItems[i], screenWidth / 2 - textWidth / 2, menuY + i * menuSpacing, 30, Fade(color, hudAlpha));
             }
@@ -188,6 +240,8 @@ int main()
                     transitioningToGame = false;
                     transitionAlpha = 0.0f;
                     hudAlpha = 0.0f;
+                    StopMusicStream(menuMusic);
+                    PlayMusicStream(gameMusic);
                 }
             }
 
@@ -196,6 +250,10 @@ int main()
 
         case GAME_IS_PLAYING:
             StopMusicStream(menuMusic);
+            UpdateMusicStream(gameMusic);
+            SetMusicVolume(gameMusic, 0.5f);
+            SetMusicPitch(gameMusic, 0.8f);
+            gameOverMusicPlayed = false; // Reset flag ao sair do game over
             ClearBackground(LIGHTGRAY);
             BeginMode2D(camera);
             // Desenha um grid de debug na área andável
@@ -254,7 +312,16 @@ int main()
             {
                 if (enemies[i].active)
                 {
-                    UpdateEnemy(&enemies[i], player.position);
+                    Vector2 playerCenter = {
+                        player.position.x + player.size.x/2,
+                        player.position.y + player.size.y/2
+                    };
+                    // Ajuste: inimigo mira o centro do player, compensando metade do seu próprio tamanho
+                    Vector2 enemyCenterTarget = {
+                        playerCenter.x - enemies[i].size.x/2,
+                        playerCenter.y - enemies[i].size.y/2
+                    };
+                    UpdateEnemy(&enemies[i], enemyCenterTarget);
                 }
             }
 
@@ -279,7 +346,7 @@ int main()
                             {
                                 TakeDamageEnemy(&enemies[j], projectiles[i].damage);
                                 if (!enemies[j].active && enemies[j].health <= 0) {
-                                    PlayerGainXP(&player, enemies[j].xpReward, enemies, MAX_ENEMIES, particles, MAX_PARTICLES);
+                                    PlayerGainXP(&player, enemies[j].xpReward, enemies, MAX_ENEMIES);
                                 }
                                 projectiles[i].active = false;
                                 break;
@@ -292,13 +359,17 @@ int main()
             // --- COLISÃO JOGADOR-INIMIGO ---
             if (player.health > 0)
             {
-                // Só checa colisão se o jogador estiver vivo
-                Rectangle playerRec = {player.position.x, player.position.y, player.size.x, player.size.y};
+                // Ajuste: colisão pelo centro do player
+                Rectangle playerRec = {
+                    player.position.x + player.size.x/2 - player.size.x/2,
+                    player.position.y + player.size.y/2 - player.size.y/2,
+                    player.size.x,
+                    player.size.y
+                };
                 for (int i = 0; i < MAX_ENEMIES; i++)
                 {
                     if (enemies[i].active && enemies[i].health > 0)
                     {
-                        // Inimigo ativo e vivo
                         Rectangle enemyRec = {enemies[i].position.x, enemies[i].position.y, enemies[i].size.x, enemies[i].size.y};
                         if (CheckCollisionRecs(playerRec, enemyRec))
                         {
@@ -319,6 +390,21 @@ int main()
                     DrawEnemy(enemies[i]);
             EndMode2D();
             DrawHUD(&player);
+            // Hotkey bar de magias (apenas visual)
+            static float slotCooldowns[3] = {0.0f, 0.0f, 0.0f};
+            static float slotCooldownBase[3] = {5.0f, 5.0f, 5.0f}; // 5s para cada slot
+            // Atualiza cooldowns
+            for (int i = 0; i < 3; i++) {
+                if (slotCooldowns[i] > 0.0f) slotCooldowns[i] -= GetFrameTime();
+                if (slotCooldowns[i] < 0.0f) slotCooldowns[i] = 0.0f;
+            }
+            // Checa teclas 1,2,3
+            for (int i = 0; i < 3; i++) {
+                if (IsKeyPressed(KEY_ONE + i) && slotCooldowns[i] <= 0.0f) {
+                    slotCooldowns[i] = slotCooldownBase[i];
+                }
+            }
+            DrawHotkeyBar(screenWidth, screenHeight, slotCooldowns, 3);
 
             // alterações do gamestate no loop do jogo
             if (player.alive == false)
@@ -326,6 +412,16 @@ int main()
             if (IsKeyPressed(KEY_P))
                 gameState = GAME_PAUSED;
 
+
+            if (IsKeyPressed(KEY_M)){
+                static bool musicMuted = false;
+                musicMuted = !musicMuted;
+                if (musicMuted) {
+                    PauseMusicStream(gameMusic);
+                } else {
+                    ResumeMusicStream(gameMusic);
+                }
+            }
             break;
 
         case GAME_PAUSED:
@@ -337,6 +433,13 @@ int main()
                 gameState = GAME_IS_PLAYING;
             break;
         case GAME_OVER:
+            StopMusicStream(gameMusic);
+            if (!gameOverMusicPlayed) {
+                PlayMusicStream(gameOverMusic);
+                gameOverMusicPlayed = true;
+            }
+            UpdateMusicStream(gameOverMusic);
+            SetMusicPitch(gameOverMusic, 0.9f);
             DrawRectangle(0, 0, screenWidth, screenHeight, Fade(BLACK, 0.5f));
             DrawText("GAME OVER", screenWidth / 2 - MeasureText("GAME OVER", 40) / 2, screenHeight / 2 - 20, 40, RED);
             DrawText("Pressione R para reiniciar", screenWidth / 2 - MeasureText("Pressione R para reiniciar", 20) / 2, screenHeight / 2 + 20, 20, WHITE);
@@ -344,13 +447,21 @@ int main()
             {
                 ResetGame(&player, enemies, projectiles);
                 gameState = GAME_IS_PLAYING;
+                StopMusicStream(gameOverMusic);
+                gameOverMusicPlayed = false;
+                PlayMusicStream(gameMusic);
+                SetMusicVolume(gameMusic, 0.4f);
             }
             break;
         }
+        CursorDraw(); // Desenha o cursor customizado por cima de tudo
         EndDrawing();
     } // Fim do while(!WindowShouldClose())
-
     UnloadMusicStream(menuMusic);
+    UnloadMusicStream(gameMusic);
+    UnloadMusicStream(gameOverMusic);
+    AudioUnload(); // Libera recursos de áudio
+    CursorUnload();
     CloseWindow();
     return 0;
 }
