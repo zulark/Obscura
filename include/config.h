@@ -15,7 +15,12 @@
 #include <time.h>
 #include "player.h"
 #include "projectile.h"
+#include "particle.h"
 #include "enemy.h"
+#include "audio.h"
+#include "cursor.h"
+#include "magic.h"
+#include "ui.h"
 
 #define WORLD_WIDTH 3200
 #define WORLD_HEIGHT 2048

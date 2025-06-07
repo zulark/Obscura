@@ -3,7 +3,7 @@
 
 #include "raylib.h"
 
-#define MAX_ENEMIES 50
+#define MAX_ENEMIES 80
 
 typedef enum EnemyType {
     ENEMY_TYPE_NORMAL,

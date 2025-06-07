@@ -29,7 +29,7 @@ void SpawnEnemy(Enemy enemies[], Vector2 spawnPosition, EnemyType type){
                     enemies[i].speed = 100.0f + (rand() % 20 - 10);
                     enemies[i].color = (Color){ GetRandomValue(180, 220), GetRandomValue(20, 60), GetRandomValue(20, 60), 255 };
                     enemies[i].maxHealth = 20;
-                    enemies[i].attackDamage = 10;
+                    enemies[i].attackDamage = 20;
                     enemies[i].xpReward = 10;
                     break;
                 case ENEMY_TYPE_FAST:
@@ -45,7 +45,7 @@ void SpawnEnemy(Enemy enemies[], Vector2 spawnPosition, EnemyType type){
                     enemies[i].speed = 75.0f + (rand() % 20 - 10);
                     enemies[i].color = (Color){ GetRandomValue(20, 60), GetRandomValue(20, 60), GetRandomValue(180, 220), 255 };
                     enemies[i].maxHealth = 40;
-                    enemies[i].attackDamage = 15;
+                    enemies[i].attackDamage = 35;
                     enemies[i].xpReward = 50;
                     break;
                 default:
@@ -70,7 +70,6 @@ void UpdateEnemy(Enemy *enemy, Vector2 targetPosition) {
     if (Vector2DistanceSqr(enemy->position, targetPosition) > 1.0f) {
         Vector2 direction = Vector2Subtract(targetPosition, enemy->position);
         direction = Vector2Normalize(direction);
-        
         enemy->position.x += direction.x * enemy->speed * GetFrameTime();
         enemy->position.y += direction.y * enemy->speed * GetFrameTime();
     }

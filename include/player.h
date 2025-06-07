@@ -17,10 +17,12 @@ typedef struct Player {
     int skillPoints; // Pontos de habilidade para skill tree
     bool alive;
     Color color;
+    Texture2D sprite;
     float speed;
     float shootCooldown;
     float shootTimer;
     float invencibilityTimer;
+    bool barrierActive; // true se a invencibilidade for da barreira
     float levelUpTextTimer; // Tempo restante para mostrar o texto de level up
     float levelUpArcTimer;  // Tempo restante para mostrar o arco azul
     float levelUpArcProgress; // Progresso do arco (0.0 a 1.0)

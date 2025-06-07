@@ -44,7 +44,9 @@ Execute `Obscura.exe` a partir da raiz do projeto ou garanta que a pasta `assets
 - WASD: mover
 - Mouse: mirar
 - Clique esquerdo: atacar
-- 1, 2, 3: usar magias (hotkey bar)
+- Clique direito: magia de área (Ataque em Área)
+- E: Barreira
+- Espaço: Dash
 - ESC: menu/pause
 
 ## Créditos
@@ -59,6 +61,33 @@ Execute `Obscura.exe` a partir da raiz do projeto ou garanta que a pasta `assets
 - Sistema de drops e power-ups
 - Bosses e dificuldade dinâmica
 
----
 
-Para dúvidas ou sugestões, abra uma issue ou envie um pull request!
+#  OBSCURA - V0.4.0
+Funcionalidades:
+- Mundo expandido, limites de movimentação, câmera centralizada e limitada
+- Deadzone (zona morta) para suavizar o movimento da câmera
+- Grid de debug com coordenadas
+- Tipos de inimigos (NORMAL, FAST, STRONG) com spawn probabilístico e spawn fora da área andável
+- Inimigos perseguem o centro do player
+- Sistema de XP, level, skill points
+- XP ao matar inimigos, barra de XP no HUD, level up aumenta atributos
+- Ataque circular e invencibilidade temporária ao subir de nível
+- Floating text: valor de XP ganho aparece acima do personagem
+- Sistema de partículas (particle.h/.c), efeito visual ao upar, pronto para magias
+- HUD mostra vida, XP, nível, skill points, FPS
+- Menus de jogo, pausa, game over
+- Hotkey bar de magias (slots 1,2,3), efeito visual de cooldown
+- Modularização do áudio: criação de audio.h/.c, centralização dos efeitos sonoros
+- Sons para tiro, dano no player, level up, morte de inimigo integrados e tocando nos eventos corretos
+- Ajuste de volume e pitch via funções do módulo de áudio
+- Correção da música de game over para tocar apenas uma vez
+- Modularização inicial: headers e arquivos fonte para áudio, magias, UI/HUD
+- Limpeza de código, remoção de warnings, atualização de comentários
+- Ajuste de colisão para alinhar visualmente player e inimigos
+- Makefile ajustado para incluir resource.res (ícone do .exe)
+- Orientações para exportar o executável junto com a pasta assets
+- Explicação sobre falsos positivos de antivírus e assinatura digital
+- Implementação de cursor customizado com Texture2D, escala ajustável e offset para centralização
+- Sistema simplificado para usar apenas um sprite de cursor
+- Orientação para alinhar o centro do cursor à posição do mouse
+ara dúvidas ou sugestões, abra uma issue ou envie um pull request!

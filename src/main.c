@@ -1,41 +1,4 @@
-/*******************************************************************************************
- *
- *   OBSCURA - V0.4.0
- *
- *   Funcionalidades:
- *   - Mundo expandido, limites de movimentação, câmera centralizada e limitada
- *   - Deadzone (zona morta) para suavizar o movimento da câmera
- *   - Grid de debug com coordenadas
- *   - Tipos de inimigos (NORMAL, FAST, STRONG) com spawn probabilístico e spawn fora da área andável
- *   - Inimigos perseguem o centro do player
- *   - Sistema de XP, level, skill points
- *   - XP ao matar inimigos, barra de XP no HUD, level up aumenta atributos
- *   - Ataque circular e invencibilidade temporária ao subir de nível
- *   - Floating text: valor de XP ganho aparece acima do personagem
- *   - Sistema de partículas (particle.h/.c), efeito visual ao upar, pronto para magias
- *   - HUD mostra vida, XP, nível, skill points, FPS
- *   - Menus de jogo, pausa, game over
- *   - Hotkey bar de magias (slots 1,2,3), efeito visual de cooldown
- *   - Modularização do áudio: criação de audio.h/.c, centralização dos efeitos sonoros
- *   - Sons para tiro, dano no player, level up, morte de inimigo integrados e tocando nos eventos corretos
- *   - Ajuste de volume e pitch via funções do módulo de áudio
- *   - Correção da música de game over para tocar apenas uma vez
- *   - Modularização inicial: headers e arquivos fonte para áudio, magias, UI/HUD
- *   - Limpeza de código, remoção de warnings, atualização de comentários
- *   - Ajuste de colisão para alinhar visualmente player e inimigos
- *   - Makefile ajustado para incluir resource.res (ícone do .exe)
- *   - Orientações para exportar o executável junto com a pasta assets
- *   - Explicação sobre falsos positivos de antivírus e assinatura digital
- *   - Implementação de cursor customizado com Texture2D, escala ajustável e offset para centralização
- *   - Sistema simplificado para usar apenas um sprite de cursor
- *   - Orientação para alinhar o centro do cursor à posição do mouse
- *
- ********************************************************************************************/
 #include <config.h>
-#include "raylib.h"
-#include "particle.h"
-#include "audio.h"
-#include "cursor.h"
 
 typedef enum GameState
 {
@@ -74,17 +37,26 @@ void DrawHUD(Player *player)
     DrawRectangle(x + 2, xpBarY + 2, xpBarWidth, xpBarHeight, Fade(BLACK, 0.4f));
     DrawRectangleRounded((Rectangle){x, xpBarY, xpBarWidth * xpPercent, xpBarHeight}, 0.3f, 10, GREEN);
     DrawRectangleRoundedLines((Rectangle){x, xpBarY, xpBarWidth, xpBarHeight}, 0.3f, 10, Fade(WHITE, 0.3f));
-    DrawText(TextFormat("XP: %d / %d", player->experience, xpToNextLevel), x + 8, xpBarY - 2, 12, WHITE);
+    // Barra de mana
+    int manaBarY = xpBarY + xpBarHeight + 20;
+    int manaBarHeight = 12;
+    int manaBarWidth = barWidth;
+    float manaPercent = (float)player->mana / player->maxMana;
+    DrawRectangle(x + 2, manaBarY + 2, manaBarWidth, manaBarHeight, Fade(BLACK, 0.4f));
+    DrawRectangleRounded((Rectangle){x, manaBarY, manaBarWidth * manaPercent, manaBarHeight}, 0.3f, 10, BLUE);
+    DrawRectangleRoundedLines((Rectangle){x, manaBarY, manaBarWidth, manaBarHeight}, 0.3f, 10, Fade(WHITE, 0.3f));
+    DrawText(TextFormat("Mana: %d / %d", player->mana, player->maxMana), x + 8, manaBarY - 2, 12, WHITE);
+    // Pontos de habilidade
 
-    DrawText(TextFormat("Pontos de habilidade: %d", player->skillPoints), x, y + 65, 18, YELLOW);
+    DrawText(TextFormat("Nível: %d", player->level), x + 8, xpBarY + xpBarHeight + 2, 12, WHITE);
+    DrawText(TextFormat("XP: %d / %d", player->experience, xpToNextLevel), x + 8, xpBarY - 2, 12, WHITE);
 
     // FPS no canto
     DrawFPS(screenWidth - 100, 10);
 }
 
-
 void ResetGame(Player *player, Enemy enemies[], Projectile projectiles[])
-{   
+{
     *player = InitPlayer(WORLD_WIDTH / 2.0f, WORLD_HEIGHT / 2.0f);
 
     for (int i = 0; i < MAX_ENEMIES; i++)
@@ -100,7 +72,7 @@ void ResetGame(Player *player, Enemy enemies[], Projectile projectiles[])
 }
 
 int main()
-{   
+{
     float hudAlpha = 0.0f;
     float fadeSpeed = 2.0f;
     bool transitioningToGame = false;
@@ -116,7 +88,8 @@ int main()
     PlayMusicStream(menuMusic);
 
     float enemySpawnTimer = 0.0f;
-    float enemySpawnCooldown = 1.0f;
+    // randomize enemy spawn cooldown
+    float enemySpawnCooldown = (float)GetRandomValue(200, 5000) / 1000.0f; // entre 0.2s e 5s
 
     InitWindow(screenWidth, screenHeight, gameName);
     Image icon = LoadImage("assets/icon.png");
@@ -142,13 +115,15 @@ int main()
 
     Camera2D camera = {0};
     camera.target = player.position;
-    camera.offset = (Vector2){screenWidth/2.0f, screenHeight/2.0f};
+    camera.offset = (Vector2){screenWidth / 2.0f, screenHeight / 2.0f};
     camera.rotation = 0.0f;
     camera.zoom = 1.0f;
 
     // Deadzone para suavizar o movimento da câmera
     const float deadzoneWidth = 64.0f;  // largura da zona morta (bem pequena)
-    const float deadzoneHeight = 32.0f;  // altura da zona morta (bem pequena)
+    const float deadzoneHeight = 32.0f; // altura da zona morta (bem pequena)
+
+    Texture2D tile = LoadTexture("assets/sprites/ground_64x64.png");
 
     while (!WindowShouldClose())
     {
@@ -161,29 +136,39 @@ int main()
         float halfScreenH = screenHeight / 2.0f;
         float camX = camera.target.x;
         float camY = camera.target.y;
-        float playerCenterX = player.position.x + player.size.x/2;
-        float playerCenterY = player.position.y + player.size.y/2;
+        float playerCenterX = player.position.x + player.size.x / 2;
+        float playerCenterY = player.position.y + player.size.y / 2;
         // Deadzone retângulo central
-        float dzLeft = camX - deadzoneWidth/2;
-        float dzRight = camX + deadzoneWidth/2;
-        float dzTop = camY - deadzoneHeight/2;
-        float dzBottom = camY + deadzoneHeight/2;
+        float dzLeft = camX - deadzoneWidth / 2;
+        float dzRight = camX + deadzoneWidth / 2;
+        float dzTop = camY - deadzoneHeight / 2;
+        float dzBottom = camY + deadzoneHeight / 2;
         // Se o player sair da deadzone, move a câmera
-        if (playerCenterX < dzLeft) camX = playerCenterX + deadzoneWidth/2;
-        if (playerCenterX > dzRight) camX = playerCenterX - deadzoneWidth/2;
-        if (playerCenterY < dzTop) camY = playerCenterY + deadzoneHeight/2;
-        if (playerCenterY > dzBottom) camY = playerCenterY - deadzoneHeight/2;
+        if (playerCenterX < dzLeft)
+            camX = playerCenterX + deadzoneWidth / 2;
+        if (playerCenterX > dzRight)
+            camX = playerCenterX - deadzoneWidth / 2;
+        if (playerCenterY < dzTop)
+            camY = playerCenterY + deadzoneHeight / 2;
+        if (playerCenterY > dzBottom)
+            camY = playerCenterY - deadzoneHeight / 2;
         // Limita a câmera nas bordas do mundo
-        if (camX < halfScreenW) camX = halfScreenW;
-        if (camY < halfScreenH) camY = halfScreenH;
-        if (camX > WORLD_WIDTH - halfScreenW) camX = WORLD_WIDTH - halfScreenW;
-        if (camY > WORLD_HEIGHT - halfScreenH) camY = WORLD_HEIGHT - halfScreenH;
+        if (camX < halfScreenW)
+            camX = halfScreenW;
+        if (camY < halfScreenH)
+            camY = halfScreenH;
+        if (camX > WORLD_WIDTH - halfScreenW)
+            camX = WORLD_WIDTH - halfScreenW;
+        if (camY > WORLD_HEIGHT - halfScreenH)
+            camY = WORLD_HEIGHT - halfScreenH;
         camera.target = (Vector2){camX, camY};
 
         switch (gameState)
         {
         case GAME_MENU:
-        {   
+        {
+            StopMusicStream(gameOverMusic); // Garante que a música de game over pare ao voltar ao menu
+            gameOverMusicPlayed = false;
             ClearBackground(BLACK);
             if (hudAlpha < 1.0f)
                 hudAlpha += dt * fadeSpeed;
@@ -208,21 +193,42 @@ int main()
             int menuY = screenHeight / 2 + 20;
             int menuSpacing = 40;
 
+            // se mouse estiver sobre o item do menu, destaque ele
+            int mouseY = GetMouseY();
             for (int i = 0; i < menuCount; i++)
             {
-                Color color = (i == menuSelected) ? DARKPURPLE : GRAY;
+                int itemY = menuY + i * menuSpacing;
                 int textWidth = MeasureText(menuItems[i], 30);
-                DrawText(menuItems[i], screenWidth / 2 - textWidth / 2, menuY + i * menuSpacing, 30, Fade(color, hudAlpha));
+                Rectangle itemRect = {
+                    screenWidth / 2 - textWidth / 2,
+                    itemY,
+                    textWidth,
+                    30};
+                if (CheckCollisionPointRec(GetMousePosition(), itemRect))
+                    menuSelected = i;
+
+                Color color = (i == menuSelected) ? DARKPURPLE : GRAY;
+                DrawText(menuItems[i], screenWidth / 2 - textWidth / 2, itemY, 30, Fade(color, hudAlpha));
             }
 
-            // Navegação
+            // mesma coisa mas com o teclado
             if (IsKeyPressed(KEY_DOWN))
                 menuSelected = (menuSelected + 1) % menuCount;
             if (IsKeyPressed(KEY_UP))
                 menuSelected = (menuSelected - 1 + menuCount) % menuCount;
 
-            if (IsKeyPressed(KEY_ENTER))
+            // Iniciar jogo se pressionar ENTER ou clicar no botão
+            if (IsKeyPressed(KEY_ENTER) ||
+                (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
+                 GetMouseY() >= menuY && GetMouseY() < menuY + menuCount * menuSpacing))
             {
+                int clickedIndex = -1;
+                if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+                {
+                    clickedIndex = (GetMouseY() - menuY) / menuSpacing;
+                    if (clickedIndex >= 0 && clickedIndex < menuCount)
+                        menuSelected = clickedIndex;
+                }
                 if (menuSelected == 0)
                     transitioningToGame = true;
                 else if (menuSelected == 1)
@@ -256,17 +262,25 @@ int main()
             gameOverMusicPlayed = false; // Reset flag ao sair do game over
             ClearBackground(LIGHTGRAY);
             BeginMode2D(camera);
+            // Fundo tileado
+            for (int x = 0; x < WORLD_WIDTH; x += tile.width)
+            {
+                for (int y = 0; y < WORLD_HEIGHT; y += tile.height)
+                {
+                    DrawTexture(tile, x, y, WHITE);
+                }
+            }
             // Desenha um grid de debug na área andável
-            int gridSize = 200;
-            Color gridColor = Fade(BLACK, 0.5f);
-            for (int x = 0; x <= WORLD_WIDTH; x += gridSize) {
-                DrawLine(x, 0, x, WORLD_HEIGHT, gridColor);
-                DrawText(TextFormat("%d", x), x + 4, 4, 18, gridColor);
-            }
-            for (int y = 0; y <= WORLD_HEIGHT; y += gridSize) {
-                DrawLine(0, y, WORLD_WIDTH, y, gridColor);
-                DrawText(TextFormat("%d", y), 4, y + 4, 18, gridColor);
-            }
+            // int gridSize = 200;
+            // Color gridColor = Fade(BLACK, 0.5f);
+            // for (int x = 0; x <= WORLD_WIDTH; x += gridSize) {
+            //     DrawLine(x, 0, x, WORLD_HEIGHT, gridColor);
+            //     DrawText(TextFormat("%d", x), x + 4, 4, 18, gridColor);
+            // }
+            // for (int y = 0; y <= WORLD_HEIGHT; y += gridSize) {
+            //     DrawLine(0, y, WORLD_WIDTH, y, gridColor);
+            //     DrawText(TextFormat("%d", y), 4, y + 4, 18, gridColor);
+            // }
             DrawPlayer(player);
             DrawPlayerLevelUpEffects(&player);
             UpdatePlayer(&player);
@@ -282,27 +296,33 @@ int main()
                 Vector2 spawnPos;
                 // Spawna inimigos fora da área andável
                 int edge = GetRandomValue(0, 3);
-                switch (edge) {
-                    case 0: // topo
-                        spawnPos = (Vector2){ (float)GetRandomValue(0, WORLD_WIDTH), -60.0f };
-                        break;
-                    case 1: // base
-                        spawnPos = (Vector2){ (float)GetRandomValue(0, WORLD_WIDTH), WORLD_HEIGHT + 10.0f };
-                        break;
-                    case 2: // esquerda
-                        spawnPos = (Vector2){ -60.0f, (float)GetRandomValue(0, WORLD_HEIGHT) };
-                        break;
-                    case 3: // direita
-                        spawnPos = (Vector2){ WORLD_WIDTH + 10.0f, (float)GetRandomValue(0, WORLD_HEIGHT) };
-                        break;
+                switch (edge)
+                {
+                case 0: // topo
+                    spawnPos = (Vector2){(float)GetRandomValue(0, WORLD_WIDTH), -60.0f};
+                    break;
+                case 1: // base
+                    spawnPos = (Vector2){(float)GetRandomValue(0, WORLD_WIDTH), WORLD_HEIGHT + 10.0f};
+                    break;
+                case 2: // esquerda
+                    spawnPos = (Vector2){-60.0f, (float)GetRandomValue(0, WORLD_HEIGHT)};
+                    break;
+                case 3: // direita
+                    spawnPos = (Vector2){WORLD_WIDTH + 10.0f, (float)GetRandomValue(0, WORLD_HEIGHT)};
+                    break;
                 }
                 int chanceToSpawn = GetRandomValue(1, 100);
                 EnemyType typeToSpawn;
-                if (chanceToSpawn <= 70) {
+                if (chanceToSpawn <= 70)
+                {
                     typeToSpawn = ENEMY_TYPE_NORMAL; // 70%
-                } else if (chanceToSpawn <= 85) {
-                    typeToSpawn = ENEMY_TYPE_FAST;   // 15%
-                } else {
+                }
+                else if (chanceToSpawn <= 85)
+                {
+                    typeToSpawn = ENEMY_TYPE_FAST; // 15%
+                }
+                else
+                {
                     typeToSpawn = ENEMY_TYPE_STRONG; // 5%
                 }
                 SpawnEnemy(enemies, spawnPos, typeToSpawn);
@@ -313,14 +333,12 @@ int main()
                 if (enemies[i].active)
                 {
                     Vector2 playerCenter = {
-                        player.position.x + player.size.x/2,
-                        player.position.y + player.size.y/2
-                    };
+                        player.position.x + player.size.x / 2,
+                        player.position.y + player.size.y / 2};
                     // Ajuste: inimigo mira o centro do player, compensando metade do seu próprio tamanho
                     Vector2 enemyCenterTarget = {
-                        playerCenter.x - enemies[i].size.x/2,
-                        playerCenter.y - enemies[i].size.y/2
-                    };
+                        playerCenter.x - enemies[i].size.x / 2,
+                        playerCenter.y - enemies[i].size.y / 2};
                     UpdateEnemy(&enemies[i], enemyCenterTarget);
                 }
             }
@@ -345,7 +363,8 @@ int main()
                             if (CheckCollisionCircleRec(projectiles[i].position, projectiles[i].radius, enemyRec))
                             {
                                 TakeDamageEnemy(&enemies[j], projectiles[i].damage);
-                                if (!enemies[j].active && enemies[j].health <= 0) {
+                                if (!enemies[j].active && enemies[j].health <= 0)
+                                {
                                     PlayerGainXP(&player, enemies[j].xpReward, enemies, MAX_ENEMIES);
                                 }
                                 projectiles[i].active = false;
@@ -361,11 +380,10 @@ int main()
             {
                 // Ajuste: colisão pelo centro do player
                 Rectangle playerRec = {
-                    player.position.x + player.size.x/2 - player.size.x/2,
-                    player.position.y + player.size.y/2 - player.size.y/2,
+                    player.position.x + player.size.x / 2 - player.size.x / 2,
+                    player.position.y + player.size.y / 2 - player.size.y / 2,
                     player.size.x,
-                    player.size.y
-                };
+                    player.size.y};
                 for (int i = 0; i < MAX_ENEMIES; i++)
                 {
                     if (enemies[i].active && enemies[i].health > 0)
@@ -394,31 +412,59 @@ int main()
             static float slotCooldowns[3] = {0.0f, 0.0f, 0.0f};
             static float slotCooldownBase[3] = {5.0f, 5.0f, 5.0f}; // 5s para cada slot
             // Atualiza cooldowns
-            for (int i = 0; i < 3; i++) {
-                if (slotCooldowns[i] > 0.0f) slotCooldowns[i] -= GetFrameTime();
-                if (slotCooldowns[i] < 0.0f) slotCooldowns[i] = 0.0f;
+            for (int i = 0; i < 3; i++)
+            {
+                if (slotCooldowns[i] > 0.0f)
+                    slotCooldowns[i] -= GetFrameTime();
+                if (slotCooldowns[i] < 0.0f)
+                    slotCooldowns[i] = 0.0f;
             }
-            // Checa teclas 1,2,3
-            for (int i = 0; i < 3; i++) {
-                if (IsKeyPressed(KEY_ONE + i) && slotCooldowns[i] <= 0.0f) {
-                    slotCooldowns[i] = slotCooldownBase[i];
-                }
+            MagicUpdate(&player, particles, slotCooldowns); // Atualiza cooldown real das magias
+            // Checa hotkey de magia: botão direito do mouse ativa slot 0 (MAGIC_AREA_ATTACK)
+            if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT) && slotCooldowns[0] <= 0.0f)
+            {
+                printf("DEBUG: Clique direito detectado, chamando MagicCast\n");
+                Vector2 mouseScreen = GetMousePosition();
+                Vector2 mouseWorld = GetScreenToWorld2D(mouseScreen, camera);
+                MagicCast(&player, 0, particles, mouseWorld, enemies, MAX_ENEMIES);
+                slotCooldowns[0] = slotCooldownBase[0];
+            }
+            // Barreira: tecla E ativa slot 1
+            if (IsKeyPressed(KEY_E) && slotCooldowns[1] <= 0.0f)
+            {
+                Vector2 mouseScreen = GetMousePosition();
+                Vector2 mouseWorld = GetScreenToWorld2D(mouseScreen, camera);
+                MagicCast(&player, 1, particles, mouseWorld, enemies, MAX_ENEMIES);
+                slotCooldowns[1] = slotCooldownBase[1];
+            }
+            // Dash: tecla SPACE ativa slot 2
+            if (IsKeyPressed(KEY_SPACE) && slotCooldowns[2] <= 0.0f)
+            {
+                Vector2 mouseScreen = GetMousePosition();
+                Vector2 mouseWorld = GetScreenToWorld2D(mouseScreen, camera);
+                MagicCast(&player, 2, particles, mouseWorld, enemies, MAX_ENEMIES);
+                slotCooldowns[2] = slotCooldownBase[2];
             }
             DrawHotkeyBar(screenWidth, screenHeight, slotCooldowns, 3);
-
+            // Atualiza e desenha mensagens flutuantes
+            UIUpdateFloatingMsgs();
+            UIDrawFloatingMsgs();
             // alterações do gamestate no loop do jogo
             if (player.alive == false)
                 gameState = GAME_OVER;
             if (IsKeyPressed(KEY_P))
                 gameState = GAME_PAUSED;
 
-
-            if (IsKeyPressed(KEY_M)){
+            if (IsKeyPressed(KEY_M))
+            {
                 static bool musicMuted = false;
                 musicMuted = !musicMuted;
-                if (musicMuted) {
+                if (musicMuted)
+                {
                     PauseMusicStream(gameMusic);
-                } else {
+                }
+                else
+                {
                     ResumeMusicStream(gameMusic);
                 }
             }
@@ -434,10 +480,12 @@ int main()
             break;
         case GAME_OVER:
             StopMusicStream(gameMusic);
-            if (!gameOverMusicPlayed) {
+            if (!gameOverMusicPlayed)
+            {
                 PlayMusicStream(gameOverMusic);
                 gameOverMusicPlayed = true;
             }
+            // Não repete a música: não chama PlayMusicStream novamente enquanto gameOverMusicPlayed for true
             UpdateMusicStream(gameOverMusic);
             SetMusicPitch(gameOverMusic, 0.9f);
             DrawRectangle(0, 0, screenWidth, screenHeight, Fade(BLACK, 0.5f));
@@ -460,7 +508,8 @@ int main()
     UnloadMusicStream(menuMusic);
     UnloadMusicStream(gameMusic);
     UnloadMusicStream(gameOverMusic);
-    AudioUnload(); // Libera recursos de áudio
+    UnloadTexture(tile); // Libera textura do fundo
+    AudioUnload();       // Libera recursos de áudio
     CursorUnload();
     CloseWindow();
     return 0;

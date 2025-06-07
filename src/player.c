@@ -26,7 +26,8 @@ Player InitPlayer(float startX, float startY)
     player.levelUpTextTimer = 0.0f;
     player.levelUpArcTimer = 0.0f;
     player.levelUpArcProgress = 0.0f;
-    // player.sprite = LoadTexture("assets/sprites/player.png");
+    player.sprite = LoadTexture("assets/sprites/player.png");
+    player.barrierActive = false;
     return player;
 }
 
@@ -105,6 +106,12 @@ void TakeDamagePlayer(Player *player, int damageAmount)
         player->invencibilityTimer = 1.0f;
         TraceLog(LOG_INFO, "JOGADOR tomou %d de dano, vida: %d/%d", damageAmount, player->health, player->maxHealth);
         AudioPlaySound(SOUND_PLAYER_HIT);
+        // Floating text de dano
+        char txt[32];
+        snprintf(txt, sizeof(txt), "-%d HP", damageAmount);
+        float textWidth = MeasureText(txt, 22);
+        Vector2 pos = { (screenWidth / 2.0f) - (textWidth / 2.0f), screenHeight / 2.0f - 50.0f };
+        UIShowFloatingMsg(txt, pos, RED, 1.0f);
         if (player->health <= 0)
         {
             player->alive = false;
@@ -123,6 +130,7 @@ void UpdatePlayer(Player *player)
         if (player->invencibilityTimer < 0.0f)
         {
             player->invencibilityTimer = 0.0f;
+            player->barrierActive = false;
         }
     }
 
@@ -156,18 +164,26 @@ void DrawPlayer(Player player)
         }
     }
 
-    // if (player.sprite.id > 0)
-    // {
-    //     Rectangle sourceRec = {0.0f, 0.0f, (float)player.sprite.width, (float)player.sprite.height};
-    //     Rectangle destRec = {player.position.x, player.position.y, player.size.x, player.size.y};
-    //     Vector2 origin = {0.0f, 0.0f};
-    //     float rotation = 0.0f;
-    //     DrawTexturePro(player.sprite, sourceRec, destRec, origin, rotation, playerDrawColor);
-    // }
-    // else
-    // {
-    DrawRectangleV(player.position, player.size, playerDrawColor);
-    // }
+    if (player.sprite.id > 0)
+    {
+        Rectangle sourceRec = {0.0f, 0.0f, (float)player.sprite.width, (float)player.sprite.height};
+        Rectangle destRec = {player.position.x, player.position.y, player.size.x, player.size.y};
+        Vector2 origin = {0.0f, 0.0f};
+        float rotation = 0.0f;
+        DrawTexturePro(player.sprite, sourceRec, destRec, origin, rotation, playerDrawColor);
+    }
+    else
+    {
+         DrawRectangleV(player.position, player.size, playerDrawColor);
+    }
+
+    // Efeito visual da barreira: bolha translúcida
+    if (player.barrierActive) {
+        Vector2 center = {player.position.x + player.size.x/2, player.position.y + player.size.y/2};
+        float barrierRadius = player.size.x * 1.5f;
+        Color barrierColor = (Color){80, 180, 255, 90}; // Azul claro translúcido
+        DrawCircleV(center, barrierRadius, barrierColor);
+    }
 }
 
 void PlayerGainXP(Player *player, int xp, Enemy enemies[], int maxEnemies)
@@ -187,6 +203,8 @@ void PlayerLevelUp(Player *player, Enemy enemies[], int maxEnemies){
     player->level++;
     player->maxHealth += 10 * player->level;
     player->health = player->maxHealth;
+    player->maxMana += 5 * player->level;
+    player->mana = player->maxMana;
     player->skillPoints++;
     player->invencibilityTimer = 2.0f; // 2 segundos de invencibilidade
     float killRadius = 350.0f;

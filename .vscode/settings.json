@@ -2,6 +2,7 @@
     "C_Cpp.errorSquiggles": "disabled",
     "files.associations": {
         "*.tcss": "tailwindcss",
-        "player.h": "c"
+        "player.h": "c",
+        "raylib.h": "c"
     }
 }

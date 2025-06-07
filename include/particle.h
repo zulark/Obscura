@@ -1,6 +1,6 @@
 #ifndef PARTICLE_H
 #define PARTICLE_H
-#define MAX_PARTICLES 256
+#define MAX_PARTICLES 1000
 
 #include "raylib.h"
 
