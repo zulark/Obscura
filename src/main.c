@@ -10,50 +10,17 @@ typedef enum GameState
 
 GameState gameState = GAME_MENU;
 
-void DrawHUD(Player *player)
-{
-    int x = 20;
-    int y = 20;
-
-    int barWidth = 300;
-    int barHeight = 24;
-
-    float healthPercent = (float)player->health / player->maxHealth;
-
-    DrawRectangle(x + 2, y + 2, barWidth, barHeight, Fade(BLACK, 0.4f));
-    DrawRectangleRounded((Rectangle){x, y, barWidth, barHeight}, 0.3f, 10, Fade(MAROON, 0.5f));
-    DrawRectangleRounded((Rectangle){x, y, barWidth * healthPercent, barHeight}, 0.3f, 10, RED);
-    DrawRectangleRoundedLines((Rectangle){x, y, barWidth, barHeight}, 0.3f, 10, Fade(WHITE, 0.3f));
-    const char *hpText = TextFormat("HP: %d / %d", player->health, player->maxHealth);
-    int textWidth = MeasureText(hpText, 16);
-    DrawText(hpText, x + (barWidth - textWidth) / 2, y + 4, 16, WHITE);
-
-    // Barra de XP
-    int xpBarY = y + 30;
-    int xpBarHeight = 12;
-    int xpBarWidth = barWidth;
-    int xpToNextLevel = 100 + (player->level - 1) * 50;
-    float xpPercent = (float)player->experience / xpToNextLevel;
-    DrawRectangle(x + 2, xpBarY + 2, xpBarWidth, xpBarHeight, Fade(BLACK, 0.4f));
-    DrawRectangleRounded((Rectangle){x, xpBarY, xpBarWidth * xpPercent, xpBarHeight}, 0.3f, 10, GREEN);
-    DrawRectangleRoundedLines((Rectangle){x, xpBarY, xpBarWidth, xpBarHeight}, 0.3f, 10, Fade(WHITE, 0.3f));
-    // Barra de mana
-    int manaBarY = xpBarY + xpBarHeight + 20;
-    int manaBarHeight = 12;
-    int manaBarWidth = barWidth;
-    float manaPercent = (float)player->mana / player->maxMana;
-    DrawRectangle(x + 2, manaBarY + 2, manaBarWidth, manaBarHeight, Fade(BLACK, 0.4f));
-    DrawRectangleRounded((Rectangle){x, manaBarY, manaBarWidth * manaPercent, manaBarHeight}, 0.3f, 10, BLUE);
-    DrawRectangleRoundedLines((Rectangle){x, manaBarY, manaBarWidth, manaBarHeight}, 0.3f, 10, Fade(WHITE, 0.3f));
-    DrawText(TextFormat("Mana: %d / %d", player->mana, player->maxMana), x + 8, manaBarY - 2, 12, WHITE);
-    // Pontos de habilidade
-
-    DrawText(TextFormat("Nível: %d", player->level), x + 8, xpBarY + xpBarHeight + 2, 12, WHITE);
-    DrawText(TextFormat("XP: %d / %d", player->experience, xpToNextLevel), x + 8, xpBarY - 2, 12, WHITE);
-
-    // FPS no canto
-    DrawFPS(screenWidth - 100, 10);
-}
+// --- VARIÁVEIS DE WAVE ---
+int currentWave = 0; // começa em 0, só incrementa ao iniciar a primeira wave
+int enemiesToSpawn = 0;
+int enemiesAlive = 0;
+bool inWave = false;
+bool inPreparation = false;
+float waveCooldownTimer = 0.0f;
+const float wavePrepTime = 15.0f; // segundos de preparação entre waves
+int enemiesSpawnedThisWave = 0;
+float enemyWaveSpawnTimer = 0.0f;
+const float enemyWaveSpawnInterval = 0.7f; // tempo entre cada spawn
 
 void ResetGame(Player *player, Enemy enemies[], Projectile projectiles[])
 {
@@ -87,10 +54,6 @@ int main()
 
     PlayMusicStream(menuMusic);
 
-    float enemySpawnTimer = 0.0f;
-    // randomize enemy spawn cooldown
-    float enemySpawnCooldown = (float)GetRandomValue(200, 5000) / 1000.0f; // entre 0.2s e 5s
-
     InitWindow(screenWidth, screenHeight, gameName);
     Image icon = LoadImage("assets/icon.png");
     SetWindowIcon(icon);
@@ -109,21 +72,31 @@ int main()
     Particle particles[MAX_PARTICLES];
     InitParticles(particles, MAX_PARTICLES);
 
-    Vector2 stars[100];
-    for (int i = 0; i < 100; i++)
-        stars[i] = (Vector2){GetRandomValue(0, screenWidth), GetRandomValue(0, screenHeight)};
+    float magicCooldowns[MAGIC_COUNT] = {0};
+    float slotCooldowns[MAGIC_COUNT] = {0};
+    const float slotCooldownBase[MAGIC_COUNT] = {5.0f, 5.0f, 5.0f};
 
+    //desenha estrelas caindo no menu
+    Vector2 stars[100];
+    for (int i = 0; i < 100; i++) {
+        stars[i] = (Vector2){GetRandomValue(0, screenWidth), GetRandomValue(0, screenHeight)};
+    }
+    //inicializa a câmera
     Camera2D camera = {0};
     camera.target = player.position;
     camera.offset = (Vector2){screenWidth / 2.0f, screenHeight / 2.0f};
     camera.rotation = 0.0f;
     camera.zoom = 1.0f;
 
-    // Deadzone para suavizar o movimento da câmera
-    const float deadzoneWidth = 64.0f;  // largura da zona morta (bem pequena)
-    const float deadzoneHeight = 32.0f; // altura da zona morta (bem pequena)
+    // deadzone para suavizar o movimento da câmera
+    // X e Y da zona morta (bem pequena)
+    const float deadzoneWidth = 64.0f;  
+    const float deadzoneHeight = 32.0f; 
 
     Texture2D tile = LoadTexture("assets/sprites/ground_64x64.png");
+
+    static UpgradeMenuState upgradeMenuState = {0, 0, 0}; 
+    static bool upgradeMenuWasShown = false; 
 
     while (!WindowShouldClose())
     {
@@ -167,7 +140,7 @@ int main()
         {
         case GAME_MENU:
         {
-            StopMusicStream(gameOverMusic); // Garante que a música de game over pare ao voltar ao menu
+            StopMusicStream(gameOverMusic); 
             gameOverMusicPlayed = false;
             ClearBackground(BLACK);
             if (hudAlpha < 1.0f)
@@ -185,9 +158,7 @@ int main()
             float titleOffset = sin(GetTime() * 2) * 5; // efeito de bounce
             DrawText("OBSCURA", screenWidth / 2 - MeasureText("OBSCURA", 60) / 2, screenHeight / 2 - 100 + titleOffset, 60, Fade(PURPLE, hudAlpha));
             DrawText("Desenvolvido por Felipe", screenWidth / 2 - MeasureText("Desenvolvido por Felipe", 20) / 2, screenHeight - 60, 20, Fade(DARKGRAY, hudAlpha));
-
-            // --- MENU COM BOTOES ---
-            static int menuSelected = 0;
+                static int menuSelected = 0;
             const char *menuItems[] = {"Iniciar Jogo", "Sair"};
             int menuCount = 2;
             int menuY = screenHeight / 2 + 20;
@@ -220,18 +191,26 @@ int main()
             // Iniciar jogo se pressionar ENTER ou clicar no botão
             if (IsKeyPressed(KEY_ENTER) ||
                 (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
-                 GetMouseY() >= menuY && GetMouseY() < menuY + menuCount * menuSpacing))
+                 mouseY >= menuY && mouseY < menuY + menuCount * menuSpacing))
             {
                 int clickedIndex = -1;
-                if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+                if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) // Check again to ensure it was a click
                 {
-                    clickedIndex = (GetMouseY() - menuY) / menuSpacing;
+                    clickedIndex = (mouseY - menuY) / menuSpacing;
                     if (clickedIndex >= 0 && clickedIndex < menuCount)
+                    {
                         menuSelected = clickedIndex;
+                    }
+                    else
+                    {
+                        if (!IsKeyPressed(KEY_ENTER))
+                            clickedIndex = -1; // Invalidate if only mouse click and it's bad
+                    }
                 }
-                if (menuSelected == 0)
+
+                if (menuSelected == 0 && (IsKeyPressed(KEY_ENTER) || clickedIndex == 0))
                     transitioningToGame = true;
-                else if (menuSelected == 1)
+                else if (menuSelected == 1 && (IsKeyPressed(KEY_ENTER) || clickedIndex == 1))
                     CloseWindow();
             }
 
@@ -259,7 +238,7 @@ int main()
             UpdateMusicStream(gameMusic);
             SetMusicVolume(gameMusic, 0.5f);
             SetMusicPitch(gameMusic, 0.8f);
-            gameOverMusicPlayed = false; // Reset flag ao sair do game over
+            gameOverMusicPlayed = false;
             ClearBackground(LIGHTGRAY);
             BeginMode2D(camera);
             // Fundo tileado
@@ -270,64 +249,138 @@ int main()
                     DrawTexture(tile, x, y, WHITE);
                 }
             }
-            // Desenha um grid de debug na área andável
-            // int gridSize = 200;
-            // Color gridColor = Fade(BLACK, 0.5f);
-            // for (int x = 0; x <= WORLD_WIDTH; x += gridSize) {
-            //     DrawLine(x, 0, x, WORLD_HEIGHT, gridColor);
-            //     DrawText(TextFormat("%d", x), x + 4, 4, 18, gridColor);
-            // }
-            // for (int y = 0; y <= WORLD_HEIGHT; y += gridSize) {
-            //     DrawLine(0, y, WORLD_WIDTH, y, gridColor);
-            //     DrawText(TextFormat("%d", y), 4, y + 4, 18, gridColor);
-            // }
             DrawPlayer(player);
             DrawPlayerLevelUpEffects(&player);
             UpdatePlayer(&player);
             PlayerTryShoot(&player, projectiles, camera);
+            // --- MAGIC SYSTEM ---
+            MagicUpdate(&player, particles, magicCooldowns);
+            // Atualiza slotCooldowns para refletir magicCooldowns (garante sincronismo com hotkeybar)
+            for (int i = 0; i < MAGIC_COUNT; i++) {
+                if (slotCooldowns[i] > 0.0f) slotCooldowns[i] -= GetFrameTime();
+                if (slotCooldowns[i] < magicCooldowns[i]) slotCooldowns[i] = magicCooldowns[i];
+                if (slotCooldowns[i] < 0.0f) slotCooldowns[i] = 0.0f;
+            }
+            // MAGIA DE ATAQUE 
+            if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT) && slotCooldowns[0] <= 0.0f)
+            {
+                Vector2 mouseScreen = GetMousePosition();
+                Vector2 mouseWorld = GetScreenToWorld2D(mouseScreen, camera);
+                if (MagicCast(&player, 0, particles, mouseWorld, enemies, MAX_ENEMIES))
+                    slotCooldowns[0] = slotCooldownBase[0];
+            }
+            // MAGIA DE DEFESA
+            if (IsKeyPressed(KEY_E) && slotCooldowns[1] <= 0.0f)
+            {
+                Vector2 mouseScreen = GetMousePosition();
+                Vector2 mouseWorld = GetScreenToWorld2D(mouseScreen, camera);
+                if (MagicCast(&player, 1, particles, mouseWorld, enemies, MAX_ENEMIES))
+                    slotCooldowns[1] = slotCooldownBase[1];
+            }
+            // DASH
+            if (IsKeyPressed(KEY_SPACE) && slotCooldowns[2] <= 0.0f)
+            {
+                Vector2 mouseScreen = GetMousePosition();
+                Vector2 mouseWorld = GetScreenToWorld2D(mouseScreen, camera);
+                if (MagicCast(&player, 2, particles, mouseWorld, enemies, MAX_ENEMIES))
+                    slotCooldowns[2] = slotCooldownBase[2];
+            }
+            // Atualiza magicCooldowns para refletir slotCooldowns (garante sincronismo com hotkeybar)
+            for (int i = 0; i < MAGIC_COUNT; i++) {
+                magicCooldowns[i] = slotCooldowns[i];
+            }
             for (int i = 0; i < MAX_PROJECTILES; i++)
                 UpdateProjectile(&projectiles[i]);
-
-            enemySpawnTimer += GetFrameTime();
-
-            if (enemySpawnTimer >= enemySpawnCooldown)
+            // --- SISTEMA DE WAVES ---
+            if (!inWave && !inPreparation && currentWave == 0)
             {
-                enemySpawnTimer = 0.0f;
-                Vector2 spawnPos;
-                // Spawna inimigos fora da área andável
-                int edge = GetRandomValue(0, 3);
-                switch (edge)
+                // Ao entrar no gameplay, inicia preparação
+                inPreparation = true;
+                waveCooldownTimer = wavePrepTime;
+            }
+            if (inPreparation)
+            {
+                waveCooldownTimer -= GetFrameTime();
+                if (waveCooldownTimer <= 0.0f)
                 {
-                case 0: // topo
-                    spawnPos = (Vector2){(float)GetRandomValue(0, WORLD_WIDTH), -60.0f};
-                    break;
-                case 1: // base
-                    spawnPos = (Vector2){(float)GetRandomValue(0, WORLD_WIDTH), WORLD_HEIGHT + 10.0f};
-                    break;
-                case 2: // esquerda
-                    spawnPos = (Vector2){-60.0f, (float)GetRandomValue(0, WORLD_HEIGHT)};
-                    break;
-                case 3: // direita
-                    spawnPos = (Vector2){WORLD_WIDTH + 10.0f, (float)GetRandomValue(0, WORLD_HEIGHT)};
-                    break;
-                }
-                int chanceToSpawn = GetRandomValue(1, 100);
-                EnemyType typeToSpawn;
-                if (chanceToSpawn <= 70)
-                {
-                    typeToSpawn = ENEMY_TYPE_NORMAL; // 70%
-                }
-                else if (chanceToSpawn <= 85)
-                {
-                    typeToSpawn = ENEMY_TYPE_FAST; // 15%
+                    // Começa a wave
+                    currentWave++;
+                    inWave = true;
+                    inPreparation = false;
+                    enemiesToSpawn = 5 + currentWave * 3;
+                    enemiesAlive = 0;
+                    enemiesSpawnedThisWave = 0;
+                    enemyWaveSpawnTimer = 0.0f;
+                    upgradeMenuWasShown = false;
                 }
                 else
                 {
-                    typeToSpawn = ENEMY_TYPE_STRONG; // 5%
+                    // Menu de upgrades disponível durante preparação
+                    if (!upgradeMenuWasShown && player.skillPoints > 0) {
+                        upgradeMenuState.visible = 1; // Show the upgrade menu
+                        upgradeMenuWasShown = true;
+                    }
+                    // Handle input for the upgrade menu
+                    if (upgradeMenuState.visible) {
+                        UIHandleUpgradeMenuInput(&player, &upgradeMenuState);
+                    }
                 }
-                SpawnEnemy(enemies, spawnPos, typeToSpawn);
             }
-
+            if (inWave)
+            {
+                // Spawn progressivo dos inimigos
+                if (enemiesSpawnedThisWave < enemiesToSpawn)
+                {
+                    enemyWaveSpawnTimer -= GetFrameTime();
+                    if (enemyWaveSpawnTimer <= 0.0f)
+                    {
+                        int edge = GetRandomValue(0, 3);
+                        Vector2 spawnPos;
+                        float safeDist = 400.0f;
+                        int tries = 0;
+                        do
+                        {
+                            switch (edge)
+                            {
+                            case 0:
+                                spawnPos = (Vector2){(float)GetRandomValue(0, WORLD_WIDTH), -60.0f};
+                                break;
+                            case 1:
+                                spawnPos = (Vector2){(float)GetRandomValue(0, WORLD_WIDTH), WORLD_HEIGHT + 60.0f};
+                                break;
+                            case 2:
+                                spawnPos = (Vector2){-60.0f, (float)GetRandomValue(0, WORLD_HEIGHT)};
+                                break;
+                            case 3:
+                                spawnPos = (Vector2){WORLD_WIDTH + 60.0f, (float)GetRandomValue(0, WORLD_HEIGHT)};
+                                break;
+                            }
+                            tries++;
+                        } while (Vector2Distance(spawnPos, (Vector2){player.position.x + player.size.x / 2, player.position.y + player.size.y / 2}) < safeDist && tries < 10);
+                        EnemyType type = ENEMY_TYPE_NORMAL;
+                        int chance = GetRandomValue(1, 100);
+                        if (chance > 80 + currentWave)
+                            type = ENEMY_TYPE_STRONG;
+                        else if (chance > 60 + currentWave)
+                            type = ENEMY_TYPE_FAST;
+                        SpawnEnemy(enemies, spawnPos, type);
+                        enemiesSpawnedThisWave++;
+                        enemyWaveSpawnTimer = enemyWaveSpawnInterval;
+                    }
+                }
+                // Conta inimigos vivos
+                enemiesAlive = 0;
+                for (int i = 0; i < MAX_ENEMIES; i++)
+                    if (enemies[i].active)
+                        enemiesAlive++;
+                if (enemiesAlive == 0 && enemiesSpawnedThisWave == enemiesToSpawn)
+                {
+                    inWave = false;
+                    inPreparation = true;
+                    waveCooldownTimer = wavePrepTime;
+                }
+            }
+            // --- FIM SISTEMA DE WAVES ---
             for (int i = 0; i < MAX_ENEMIES; i++)
             {
                 if (enemies[i].active)
@@ -335,26 +388,16 @@ int main()
                     Vector2 playerCenter = {
                         player.position.x + player.size.x / 2,
                         player.position.y + player.size.y / 2};
-                    // Ajuste: inimigo mira o centro do player, compensando metade do seu próprio tamanho
                     Vector2 enemyCenterTarget = {
                         playerCenter.x - enemies[i].size.x / 2,
                         playerCenter.y - enemies[i].size.y / 2};
                     UpdateEnemy(&enemies[i], enemyCenterTarget);
                 }
             }
-
             for (int i = 0; i < MAX_PROJECTILES; i++)
             {
                 if (projectiles[i].active)
                 {
-                    // Só checa projéteis ativos
-                    // Define o retângulo de colisão do projétil (se for círculo, precisamos de um Rectangle para CheckCollisionCircleRec)
-                    // Ou, se o projétil for um retângulo, use seu projectiles[i].size.
-                    // Para um projétil circular, vamos criar um retângulo que o envolve para CheckCollisionCircleRec.
-                    // No entanto, é mais comum ter projéteis retangulares ou usar CheckCollisionCircles se ambos forem círculos.
-                    // Vamos assumir que nosso projétil (círculo) colide com o retângulo do inimigo.
-                    // A função CheckCollisionCircleRec espera: center, radius, rectangle
-
                     for (int j = 0; j < MAX_ENEMIES; j++)
                     {
                         if (enemies[j].active)
@@ -374,11 +417,9 @@ int main()
                     }
                 }
             }
-
             // --- COLISÃO JOGADOR-INIMIGO ---
             if (player.health > 0)
             {
-                // Ajuste: colisão pelo centro do player
                 Rectangle playerRec = {
                     player.position.x + player.size.x / 2 - player.size.x / 2,
                     player.position.y + player.size.y / 2 - player.size.y / 2,
@@ -391,70 +432,40 @@ int main()
                         Rectangle enemyRec = {enemies[i].position.x, enemies[i].position.y, enemies[i].size.x, enemies[i].size.y};
                         if (CheckCollisionRecs(playerRec, enemyRec))
                         {
-                            TakeDamagePlayer(&player, enemies[i].attackDamage);
+                            TakeDamagePlayer(&player, enemies[i].attackDamage, enemies[i].type);
                         }
                     }
                 }
             }
-
             UpdateParticles(particles, MAX_PARTICLES);
-            DrawParticles(particles, MAX_PARTICLES); // Desenha partículas dentro do mundo, acima dos inimigos
-
+            DrawParticles(particles, MAX_PARTICLES);
             for (int i = 0; i < MAX_PROJECTILES; i++)
                 DrawProjectile(projectiles[i]);
-
             for (int i = 0; i < MAX_ENEMIES; i++)
                 if (enemies[i].active)
                     DrawEnemy(enemies[i]);
             EndMode2D();
-            DrawHUD(&player);
-            // Hotkey bar de magias (apenas visual)
-            static float slotCooldowns[3] = {0.0f, 0.0f, 0.0f};
-            static float slotCooldownBase[3] = {5.0f, 5.0f, 5.0f}; // 5s para cada slot
-            // Atualiza cooldowns
-            for (int i = 0; i < 3; i++)
+            UIDrawHUD(&player, currentWave, enemiesAlive, waveCooldownTimer, inWave);
+            UIDrawHotkeyBar(screenWidth, screenHeight, magicCooldowns, MAGIC_COUNT);
+
+            // --- UPGRADE MENU DRAWING & INPUT (HUD ELEMENT) ---
+            if (upgradeMenuState.visible && inPreparation) // Only draw if visible and in preparation
             {
-                if (slotCooldowns[i] > 0.0f)
-                    slotCooldowns[i] -= GetFrameTime();
-                if (slotCooldowns[i] < 0.0f)
-                    slotCooldowns[i] = 0.0f;
+                UIDrawUpgradeMenu(&player, &upgradeMenuState);
             }
-            MagicUpdate(&player, particles, slotCooldowns); // Atualiza cooldown real das magias
-            // Checa hotkey de magia: botão direito do mouse ativa slot 0 (MAGIC_AREA_ATTACK)
-            if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT) && slotCooldowns[0] <= 0.0f)
-            {
-                printf("DEBUG: Clique direito detectado, chamando MagicCast\n");
-                Vector2 mouseScreen = GetMousePosition();
-                Vector2 mouseWorld = GetScreenToWorld2D(mouseScreen, camera);
-                MagicCast(&player, 0, particles, mouseWorld, enemies, MAX_ENEMIES);
-                slotCooldowns[0] = slotCooldownBase[0];
-            }
-            // Barreira: tecla E ativa slot 1
-            if (IsKeyPressed(KEY_E) && slotCooldowns[1] <= 0.0f)
-            {
-                Vector2 mouseScreen = GetMousePosition();
-                Vector2 mouseWorld = GetScreenToWorld2D(mouseScreen, camera);
-                MagicCast(&player, 1, particles, mouseWorld, enemies, MAX_ENEMIES);
-                slotCooldowns[1] = slotCooldownBase[1];
-            }
-            // Dash: tecla SPACE ativa slot 2
-            if (IsKeyPressed(KEY_SPACE) && slotCooldowns[2] <= 0.0f)
-            {
-                Vector2 mouseScreen = GetMousePosition();
-                Vector2 mouseWorld = GetScreenToWorld2D(mouseScreen, camera);
-                MagicCast(&player, 2, particles, mouseWorld, enemies, MAX_ENEMIES);
-                slotCooldowns[2] = slotCooldownBase[2];
-            }
-            DrawHotkeyBar(screenWidth, screenHeight, slotCooldowns, 3);
-            // Atualiza e desenha mensagens flutuantes
-            UIUpdateFloatingMsgs();
-            UIDrawFloatingMsgs();
-            // alterações do gamestate no loop do jogo
+
+            // --- DEBUG: Exibir informações na tela ---
+            // Descomente para exibir informações de debug
+            // DrawText(TextFormat("FPS: %d", GetFPS()), 10, 10, 20, RED);
+            // DrawText(TextFormat("Posicao Jogador: (%.2f, %.2f)", player.position.x, player.position.y), 10, 40, 20, GREEN);
+            // DrawText(TextFormat("Inimigos Vivos: %d", enemiesAlive), 10, 70, 20, BLUE);
+            // DrawText(TextFormat("Onda Atual: %d", currentWave), 10, 100, 20, YELLOW);
+            // DrawText(TextFormat("Skill Points: %d", player.skillPoints), 10, 130, 20, PURPLE);
+
             if (player.alive == false)
                 gameState = GAME_OVER;
             if (IsKeyPressed(KEY_P))
                 gameState = GAME_PAUSED;
-
             if (IsKeyPressed(KEY_M))
             {
                 static bool musicMuted = false;
@@ -471,10 +482,11 @@ int main()
             break;
 
         case GAME_PAUSED:
-            ClearBackground(BLACK);
-            DrawRectangle(0, 0, screenWidth, screenHeight, Fade(BLACK, 0.5f));
-            DrawText("PAUSE", screenWidth / 2 - MeasureText("PAUSE", 40) / 2, screenHeight / 2 - 20, 40, PURPLE);
-            DrawText("Pressione P para continuar", screenWidth / 2 - MeasureText("Pressione P para continuar", 20) / 2, screenHeight / 2 + 20, 20, WHITE);
+            // ClearBackground(BLACK); // Not needed if UIDrawPauseScreen handles background
+            // DrawRectangle(0, 0, screenWidth, screenHeight, Fade(BLACK, 0.5f));
+            // DrawText("PAUSE", screenWidth / 2 - MeasureText("PAUSE", 40) / 2, screenHeight / 2 - 20, 40, PURPLE);
+            // DrawText("Pressione P para continuar", screenWidth / 2 - MeasureText("Pressione P para continuar", 20) / 2, screenHeight / 2 + 20, 20, WHITE);
+            UIDrawPauseScreen(); // Call the UI function for drawing pause screen
             if (IsKeyPressed(KEY_P))
                 gameState = GAME_IS_PLAYING;
             break;
@@ -488,9 +500,10 @@ int main()
             // Não repete a música: não chama PlayMusicStream novamente enquanto gameOverMusicPlayed for true
             UpdateMusicStream(gameOverMusic);
             SetMusicPitch(gameOverMusic, 0.9f);
-            DrawRectangle(0, 0, screenWidth, screenHeight, Fade(BLACK, 0.5f));
-            DrawText("GAME OVER", screenWidth / 2 - MeasureText("GAME OVER", 40) / 2, screenHeight / 2 - 20, 40, RED);
-            DrawText("Pressione R para reiniciar", screenWidth / 2 - MeasureText("Pressione R para reiniciar", 20) / 2, screenHeight / 2 + 20, 20, WHITE);
+            // DrawRectangle(0, 0, screenWidth, screenHeight, Fade(BLACK, 0.5f));
+            // DrawText("GAME OVER", screenWidth / 2 - MeasureText("GAME OVER", 40) / 2, screenHeight / 2 - 20, 40, RED);
+            // DrawText("Pressione R para reiniciar", screenWidth / 2 - MeasureText("Pressione R para reiniciar", 20) / 2, screenHeight / 2 + 20, 20, WHITE);
+            UIDrawGameOver(); // Call the UI function for drawing game over screen
             if (IsKeyPressed(KEY_R))
             {
                 ResetGame(&player, enemies, projectiles);

@@ -20,7 +20,7 @@ Player InitPlayer(float startX, float startY)
     player.level = 1;
     player.skillPoints = 0;
     player.alive = true;
-    player.shootCooldown = 0.35f;
+    player.shootCooldown = 0.20f;
     player.shootTimer = 0.0;
     player.invencibilityTimer = 0.0f;
     player.levelUpTextTimer = 0.0f;
@@ -28,6 +28,8 @@ Player InitPlayer(float startX, float startY)
     player.levelUpArcProgress = 0.0f;
     player.sprite = LoadTexture("assets/sprites/player.png");
     player.barrierActive = false;
+    player.attackSpeed = 600.0f; // velocidade do projétil (pixels/seg)
+    player.attackRange = 400.0f;
     return player;
 }
 
@@ -68,12 +70,11 @@ void PlayerTryShoot(Player *player, Projectile projectiles[], Camera2D camera)
     if (player->shootTimer > 0)
         player->shootTimer -= GetFrameTime();
 
-    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) || IsMouseButtonDown(MOUSE_BUTTON_LEFT))
+    if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) || IsKeyDown(KEY_Q))
     {
         if (player->shootTimer <= 0)
         {
             player->shootTimer = player->shootCooldown;
-            // Corrige para pegar a posição do mouse no mundo, não na tela
             Vector2 mouseScreen = GetMousePosition();
             Vector2 targetPosition = GetScreenToWorld2D(mouseScreen, camera);
             Vector2 shootPosition = {player->position.x + player->size.x / 2, player->position.y + player->size.y / 2};
@@ -83,6 +84,9 @@ void PlayerTryShoot(Player *player, Projectile projectiles[], Camera2D camera)
                 {
                     ShootProjectile(projectiles, i, shootPosition, targetPosition);
                     projectiles[i].color = DARKPURPLE;
+                    projectiles[i].speed = player->attackSpeed; // velocidade fixa do projétil
+                    projectiles[i].maxDistance = player->attackRange;
+                    projectiles[i].traveledDistance = 0.0f;
                     AudioSetSoundVolume(SOUND_SHOOT, 0.6f);
                     AudioPlaySound(SOUND_SHOOT);
                     break;
@@ -92,18 +96,31 @@ void PlayerTryShoot(Player *player, Projectile projectiles[], Camera2D camera)
     }
 }
 
-void TakeDamagePlayer(Player *player, int damageAmount)
+// Adiciona controle de dano por tipo de inimigo
+static bool enemyTypeHit[ENEMY_TYPE_COUNT] = {0};
+
+void ResetEnemyTypeHit() {
+    for (int i = 0; i < ENEMY_TYPE_COUNT; i++) enemyTypeHit[i] = false;
+}
+
+void TakeDamagePlayer(Player *player, int damageAmount, EnemyType type)
 {
     if (player->alive == false)
         return;
-
-    if (player->invencibilityTimer > 0.0f)
+    // Corrigido: barreira mágica ignora dano completamente
+    if (player->barrierActive) {
         return;
-
+    }
+    if (player->invencibilityTimer > 0.0f && enemyTypeHit[type])
+        return;
+    if (player->invencibilityTimer <= 0.0f) {
+        for (int i = 0; i < ENEMY_TYPE_COUNT; i++) enemyTypeHit[i] = false;
+    }
+    enemyTypeHit[type] = true;
+    player->invencibilityTimer = 1.0f;
     if (player->health > 0)
     {
         player->health -= damageAmount;
-        player->invencibilityTimer = 1.0f;
         TraceLog(LOG_INFO, "JOGADOR tomou %d de dano, vida: %d/%d", damageAmount, player->health, player->maxHealth);
         AudioPlaySound(SOUND_PLAYER_HIT);
         // Floating text de dano
@@ -121,6 +138,7 @@ void TakeDamagePlayer(Player *player, int damageAmount)
     }
 }
 
+// Atualiza lógica do jogador
 void UpdatePlayer(Player *player)
 {
     HandlePlayerInput(player);
@@ -150,6 +168,7 @@ void UpdatePlayer(Player *player)
     }
 }
 
+// Desenha o jogador
 void DrawPlayer(Player player)
 {
     if (!player.alive)
@@ -186,6 +205,7 @@ void DrawPlayer(Player player)
     }
 }
 
+// Ganha experiência
 void PlayerGainXP(Player *player, int xp, Enemy enemies[], int maxEnemies)
 {
     player->experience += xp;
@@ -199,11 +219,10 @@ void PlayerGainXP(Player *player, int xp, Enemy enemies[], int maxEnemies)
     }
 }
 
+// Ao upar, apenas recupera vida/mana, não aumenta atributos automaticamente
 void PlayerLevelUp(Player *player, Enemy enemies[], int maxEnemies){
     player->level++;
-    player->maxHealth += 10 * player->level;
     player->health = player->maxHealth;
-    player->maxMana += 5 * player->level;
     player->mana = player->maxMana;
     player->skillPoints++;
     player->invencibilityTimer = 2.0f; // 2 segundos de invencibilidade
@@ -218,8 +237,8 @@ void PlayerLevelUp(Player *player, Enemy enemies[], int maxEnemies){
             }
         }
     }
-    player->levelUpTextTimer = 1.5f; // 1.5 segundos de texto
-    player->levelUpArcTimer = 0.7f;  // 0.7 segundos de arco
+    player->levelUpTextTimer = 1.5f;
+    player->levelUpArcTimer = 0.7f;
     player->levelUpArcProgress = 0.0f;
     AudioPlaySound(SOUND_LEVELUP);
     AudioSetSoundVolume(SOUND_LEVELUP, 0.3f);
@@ -251,23 +270,47 @@ void DrawPlayerLevelUpEffects(Player *player) {
     }
 }
 
-void DrawHotkeyBar(int width, int height, float cooldowns[], int numSlots) {
-    int barW = 220, barH = 48;
-    int x = width/2 - barW/2, y = height - barH - 12;
-    DrawRectangleRounded((Rectangle){x, y, barW, barH}, 0.3f, 8, Fade(BLACK, 0.7f));
-    for (int i = 0; i < numSlots; i++) {
-        int slotX = x + 12 + i*70;
-        int slotY = y + 8;
-        DrawRectangleRounded((Rectangle){slotX, slotY, 48, 32}, 0.4f, 6, DARKGRAY);
-        DrawText(TextFormat("%d", i+1), slotX+4, slotY+2, 16, WHITE);
-        // Cooldown overlay
-        if (cooldowns[i] > 0.0f) {
-            float pct = cooldowns[i] / 5.0f; // Exemplo: 5s de cooldown
-            if (pct > 1.0f) pct = 1.0f;
-            int cdH = (int)(32*pct);
-            DrawRectangle(slotX, slotY + 32 - cdH, 48, cdH, Fade(GRAY, 180));
-            DrawText(TextFormat("%.1f", cooldowns[i]), slotX+16, slotY+8, 14, WHITE);
-        }
-    }
-}
+// Menu simples de upgrades para ser chamado entre waves
+// void PlayerUpgradeMenu(Player *player) { // This function is now deprecated and its logic will be moved to ui.c
+//     if (player->skillPoints <= 0) return;
+//     int running = 1;
+//     while (running && player->skillPoints > 0) {
+//         // Exemplo: printa no console, pode ser adaptdado para UI futuramente
+//         TraceLog(LOG_INFO, "\n--- UPGRADES DISPONÍVEIS ---");
+//         TraceLog(LOG_INFO, "Skillpoints: %d", player->skillPoints);
+//         TraceLog(LOG_INFO, "1) +20 Vida Máxima (atual: %d)", player->maxHealth);
+//         TraceLog(LOG_INFO, "2) +10 Mana Máxima (atual: %d)", player->maxMana);
+//         TraceLog(LOG_INFO, "3) -10%% no tempo entre tiros (atual: %.2fs)", player->shootCooldown);
+//         TraceLog(LOG_INFO, "4) +80 Alcance do Projétil (atual: %.0f)", player->attackRange);
+//         TraceLog(LOG_INFO, "5) Sair do menu");
+//         TraceLog(LOG_INFO, "Escolha uma opção (1-5):");
+//         int opt = 0;
+//         scanf("%d", &opt); // Para protótipo, depois trocar por UI
+//         switch(opt) {
+//             case 1:
+//                 player->maxHealth += 20;
+//                 player->health = player->maxHealth;
+//                 player->skillPoints--;
+//                 break;
+//             case 2:
+//                 player->maxMana += 10;
+//                 player->mana = player->maxMana;
+//                 player->skillPoints--;
+//                 break;
+//             case 3:
+//                 player->shootCooldown *= 0.9f; // Reduz 10% o tempo entre tiros
+//                 player->skillPoints--;
+//                 break;
+//             case 4:
+//                 player->attackRange += 80.0f;
+//                 player->skillPoints--;
+//                 break;
+//             case 5:
+//                 running = 0;
+//                 break;
+//             default:
+//                 TraceLog(LOG_INFO, "Opção inválida!");
+//         }
+//     }
+// }
 

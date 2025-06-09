@@ -30,9 +30,10 @@ void AudioSetSoundPitch(SoundID id, float pitch) {
 }
 
 void AudioUpdate() {
-    // Atualize streams se necessário
+    // Atualiza áudio
 }
 
 void AudioUnload() {
+    // Libera recursos de áudio
     for (int i = 0; i < SOUND_COUNT; i++) UnloadSound(sounds[i]);
 }

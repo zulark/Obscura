@@ -14,7 +14,7 @@ typedef struct Player {
     int maxMana;
     int experience;
     int level;
-    int skillPoints; // Pontos de habilidade para skill tree
+    int skillPoints;
     bool alive;
     Color color;
     Texture2D sprite;
@@ -22,10 +22,12 @@ typedef struct Player {
     float shootCooldown;
     float shootTimer;
     float invencibilityTimer;
-    bool barrierActive; // true se a invencibilidade for da barreira
-    float levelUpTextTimer; // Tempo restante para mostrar o texto de level up
-    float levelUpArcTimer;  // Tempo restante para mostrar o arco azul
-    float levelUpArcProgress; // Progresso do arco (0.0 a 1.0)
+    bool barrierActive;
+    float levelUpTextTimer;
+    float levelUpArcTimer;
+    float levelUpArcProgress;
+    float attackSpeed;
+    float attackRange;
     // struct SkillTree *skills; // Para integração futura
 } Player;
 
@@ -37,7 +39,7 @@ void UpdatePlayer(Player *player);
 
 void DrawPlayer(Player player);
 
-void TakeDamagePlayer(Player *player, int damageDealt);
+void TakeDamagePlayer(Player *player, int damageDealt, EnemyType type);
 
 void PlayerGainXP(Player *player, int xp, Enemy enemies[], int maxEnemies);
 
@@ -46,8 +48,6 @@ void PlayerLevelUp(Player *player, Enemy enemies[], int maxEnemies);
 void PlayerTryShoot(Player *player, Projectile projectiles[], Camera2D camera);
 
 void DrawPlayerLevelUpEffects(Player *player);
-
-void DrawHotkeyBar(int width, int height, float cooldowns[], int numSlots);
 
 #endif
 

@@ -15,6 +15,7 @@ void InitEnemies(Enemy enemies[], int maxEnemies){
     }
 }
 
+// Spawna inimigo
 void SpawnEnemy(Enemy enemies[], Vector2 spawnPosition, EnemyType type){
     for (int i = 0; i < MAX_ENEMIES; i++){
         if (!enemies[i].active){
@@ -63,6 +64,7 @@ void SpawnEnemy(Enemy enemies[], Vector2 spawnPosition, EnemyType type){
     }
 }
 
+// Atualiza lógica do inimigo
 void UpdateEnemy(Enemy *enemy, Vector2 targetPosition) {
     if (!enemy->active) return;
 
@@ -75,6 +77,7 @@ void UpdateEnemy(Enemy *enemy, Vector2 targetPosition) {
     }
 }
 
+// Aplica dano ao inimigo
 void TakeDamageEnemy(Enemy *enemy, int damageDealt) {
    if (!enemy->active) return;
 

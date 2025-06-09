@@ -20,9 +20,9 @@ typedef struct {
     int unlocked;
 } Magic;
 
-void MagicInit(Player *player);
+void MagicInit();
 void MagicUpdate(Player *player, Particle *particles, float *cooldowns);
-void MagicCast(Player *player, int slot, Particle *particles, Vector2 targetPos, Enemy *enemies, int maxEnemies);
+int MagicCast(Player *player, int slot, Particle *particles, Vector2 targetPos, Enemy *enemies, int maxEnemies);
 int MagicIsUnlocked(int magicId);
 void MagicUnlock(int magicId);
 

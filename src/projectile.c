@@ -11,6 +11,8 @@ void InitProjectiles(Projectile projectiles[], int maxProjectiles) {
         projectiles[i].color = DARKBLUE;
         // projectiles[i].texture = LoadTexture("assets/sprites/projectile.png");
         projectiles[i].radius = 30.0f;
+        projectiles[i].maxDistance = 1000.0f; // Distância máxima padrão
+        projectiles[i].traveledDistance = 0.0f; // Distância percorrida inicializada em 0
     }
 }
 
@@ -22,6 +24,7 @@ void ShootProjectile(Projectile projectiles[], int projectileIndex, Vector2 star
     projectiles[projectileIndex].damage = 5;
     projectiles[projectileIndex].speed = 450.0f; // Garante velocidade correta
     projectiles[projectileIndex].radius = 10.0f; // Raio menor para melhor precisão
+    projectiles[projectileIndex].traveledDistance = 0.0f; // Reinicia a distância percorrida ao disparar um novo projétil
 
     Vector2 direction = Vector2Subtract(targetPosition, startPosition);
     direction = Vector2Normalize(direction);
@@ -32,11 +35,19 @@ void ShootProjectile(Projectile projectiles[], int projectileIndex, Vector2 star
     projectiles[projectileIndex].velocity.x, projectiles[projectileIndex].velocity.y);
 }
 
+// Atualiza projéteis
 void UpdateProjectile(Projectile  *projectile){
     if(!projectile->active) return;
 
     projectile->position.x += projectile->velocity.x * GetFrameTime();
     projectile->position.y += projectile->velocity.y * GetFrameTime();
+    
+    float frameDistance = Vector2Length(Vector2Scale(projectile->velocity, GetFrameTime()));
+    projectile->traveledDistance += frameDistance;
+    if (projectile->traveledDistance >= projectile->maxDistance) {
+        projectile->active = false;
+        return;
+    }
     
     if (projectile->position.x < 0 - projectile->radius || 
         projectile->position.x > WORLD_WIDTH + projectile->radius ||
@@ -46,6 +57,7 @@ void UpdateProjectile(Projectile  *projectile){
     }
 }
 
+// Desenha projéteis
 void DrawProjectile(Projectile projectile){
     if(!projectile.active) return;
     // DrawTexture(projectile.texture, (int)projectile.position.x - projectile.radius, (int)projectile.position.y - projectile.radius, projectile.color);

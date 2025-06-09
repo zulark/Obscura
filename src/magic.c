@@ -2,18 +2,21 @@
 #include <stdio.h>
 #include <math.h>
 #include "config.h"
+
 static Magic magics[MAGIC_COUNT] = {
     {MAGIC_AREA_ATTACK, "Ataque em Área", 5.0f, 0.0f, 1},
     {MAGIC_BARRIER, "Barreira", 5.0f, 0.0f, 1},
     {MAGIC_DASH, "Dash", 5.0f, 0.0f, 1}
 };
 
-void MagicInit(Player *player) {
+// Inicializa magias
+void MagicInit() {
     for (int i = 0; i < MAGIC_COUNT; i++) {
         magics[i].currentCooldown = 0.0f;
     }
 }
 
+// Atualiza magias
 void MagicUpdate(Player *player, Particle *particles, float *cooldowns) {
     for (int i = 0; i < MAGIC_COUNT; i++) {
         if (magics[i].currentCooldown > 0.0f) magics[i].currentCooldown -= GetFrameTime();
@@ -32,12 +35,15 @@ void MagicUpdate(Player *player, Particle *particles, float *cooldowns) {
     }
 }
 
-void MagicCast(Player *player, int slot, Particle *particles, Vector2 targetPos, Enemy *enemies, int maxEnemies) {
+// Lança magia
+int MagicCast(Player *player, int slot, Particle *particles, Vector2 targetPos, Enemy *enemies, int maxEnemies) {
     printf("DEBUG: MagicCast chamada (slot=%d)\n", slot);
-    if (slot < 0 || slot >= MAGIC_COUNT) return;
+    if (slot < 0 || slot >= MAGIC_COUNT) return 0;
     if (magics[slot].currentCooldown > 0.0f) {
         AudioPlaySound(SOUND_NO_MANA);
-        return;
+        Vector2 cursor = GetMousePosition();
+        UIShowFloatingMsg("Em recarga!", cursor, GRAY, 1.0f);
+        return 0;
     }
     // Novo: custo de mana variável por magia (exemplo: 30 para área)
     int manaCost = 0;
@@ -52,7 +58,7 @@ void MagicCast(Player *player, int slot, Particle *particles, Vector2 targetPos,
         AudioPlaySound(SOUND_NO_MANA);
         Vector2 cursor = GetMousePosition();
         UIShowFloatingMsg("Sem mana!", cursor, SKYBLUE, 1.0f);
-        return;
+        return 0;
     }
     player->mana -= manaCost;
     if (magics[slot].id == MAGIC_AREA_ATTACK) {
@@ -139,6 +145,7 @@ void MagicCast(Player *player, int slot, Particle *particles, Vector2 targetPos,
         AudioPlaySound(SOUND_MAGIC_CAST);
     }
     magics[slot].currentCooldown = magics[slot].cooldown;
+    return 1;
 }
 
 int MagicIsUnlocked(int magicId) {

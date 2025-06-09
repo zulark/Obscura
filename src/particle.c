@@ -1,12 +1,14 @@
 #include "particle.h"
 #include <math.h>
 
+// Inicializa partículas
 void InitParticles(Particle particles[], int maxParticles) {
     for (int i = 0; i < maxParticles; i++) {
         particles[i].active = false;
     }
 }
 
+// Cria uma nova partícula
 void SpawnParticle(Particle particles[], Vector2 pos, Color color, float speed, float angle, float radius, float life) {
     for (int i = 0; i < MAX_PARTICLES; i++) {
         if (!particles[i].active) {
@@ -22,6 +24,7 @@ void SpawnParticle(Particle particles[], Vector2 pos, Color color, float speed, 
     }
 }
 
+// Atualiza partículas
 void UpdateParticles(Particle particles[], int maxParticles) {
     for (int i = 0; i < maxParticles; i++) {
         if (particles[i].active) {
@@ -35,6 +38,7 @@ void UpdateParticles(Particle particles[], int maxParticles) {
     }
 }
 
+// Desenha partículas
 void DrawParticles(Particle particles[], int maxParticles) {
     for (int i = 0; i < maxParticles; i++) {
         if (particles[i].active) {
