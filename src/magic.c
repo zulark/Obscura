@@ -74,7 +74,8 @@ int MagicCast(Player *player, int slot, Particle *particles, Vector2 targetPos, 
             };
             Color fireColor = (Color){255, GetRandomValue(80, 160), 0, 220};
             printf("DEBUG: SpawnParticle fogo (i=%d)\n", i);
-            SpawnParticle(particles, pos, fireColor, 18.0f + GetRandomValue(-4, 4), angle, 36.0f, 0.8f + GetRandomValue(0, 10)/20.0f);
+            // Adicionado 0 como xpValue para partículas de efeito genérico
+            SpawnParticle(particles, PARTICLE_TYPE_GENERIC_EFFECT, pos, fireColor, 18.0f + GetRandomValue(-4, 4), angle, 36.0f, 0.8f + GetRandomValue(0, 10)/20.0f, 0);
         }
         printf("DEBUG: Fim do loop de fogo\n");
         // Círculo central
@@ -82,7 +83,8 @@ int MagicCast(Player *player, int slot, Particle *particles, Vector2 targetPos, 
             float angle = (2 * PI * i) / 16.0f;
             Color fireColor = (Color){255, GetRandomValue(120, 180), 40, 200};
             printf("DEBUG: SpawnParticle centro (i=%d)\n", i);
-            SpawnParticle(particles, targetPos, fireColor, 24.0f + GetRandomValue(-8, 8), angle, 48.0f, 1.0f + GetRandomValue(0, 10)/20.0f);
+            // Adicionado 0 como xpValue
+            SpawnParticle(particles, PARTICLE_TYPE_GENERIC_EFFECT, targetPos, fireColor, 24.0f + GetRandomValue(-8, 8), angle, 48.0f, 1.0f + GetRandomValue(0, 10)/20.0f, 0);
         }
         printf("DEBUG: Fim do loop de centro\n");
         // DEBUG: círculo vermelho visível e persistente
@@ -93,7 +95,8 @@ int MagicCast(Player *player, int slot, Particle *particles, Vector2 targetPos, 
                 targetPos.y + sinf(angle) * 64.0f
             };
             printf("DEBUG: SpawnParticle vermelho (i=%d)\n", i);
-            SpawnParticle(particles, pos, RED, 0.0f, 0.0f, 18.0f, 0.7f);
+            // Adicionado 0 como xpValue
+            SpawnParticle(particles, PARTICLE_TYPE_GENERIC_EFFECT, pos, RED, 0.0f, 0.0f, 18.0f, 0.7f, 0);
         }
         // Dano em área
         for (int i = 0; i < maxEnemies; i++) {
@@ -104,7 +107,7 @@ int MagicCast(Player *player, int slot, Particle *particles, Vector2 targetPos, 
                 };
                 float dist = Vector2Distance(enemyCenter, targetPos);
                 if (dist <= areaRadius) {
-                    TakeDamageEnemy(&enemies[i], enemies[i].health); // Mata instantaneamente
+                    TakeDamageEnemy(&enemies[i], enemies[i].health, particles); // Mata instantaneamente
                 }
             }
         }
@@ -139,7 +142,8 @@ int MagicCast(Player *player, int slot, Particle *particles, Vector2 targetPos, 
             float t = (float)i / 12.0f;
             Vector2 pos = Vector2Lerp(playerCenter, dashTarget, t);
             Color c = Fade(YELLOW, 0.5f - t*0.4f);
-            SpawnParticle(particles, pos, c, 16.0f, 0, 5.0f, 0.5f);
+            // Adicionado 0 como xpValue
+            SpawnParticle(particles, PARTICLE_TYPE_GENERIC_EFFECT, pos, c, 16.0f, 0, 5.0f, 0.5f, 0);
         }
         UIShowFloatingMsg("Dash!", (Vector2){player->position.x + player->size.x/2, player->position.y - 32}, WHITE, 1.0f);
         AudioPlaySound(SOUND_MAGIC_CAST);

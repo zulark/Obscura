@@ -5,4 +5,4 @@ void CursorInit();
 void CursorUnload();
 void CursorDraw();
 
-#endif // CURSOR_H
+#endif

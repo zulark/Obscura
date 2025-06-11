@@ -25,4 +25,12 @@
 #define WORLD_WIDTH 3200
 #define WORLD_HEIGHT 2048
 
+typedef enum GameState
+{
+    GAME_MENU,
+    GAME_IS_PLAYING,
+    GAME_PAUSED,
+    GAME_OVER
+} GameState;
+
 #endif

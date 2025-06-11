@@ -1,13 +1,5 @@
 #include <config.h>
 
-typedef enum GameState
-{
-    GAME_MENU,
-    GAME_IS_PLAYING,
-    GAME_PAUSED,
-    GAME_OVER
-} GameState;
-
 GameState gameState = GAME_MENU;
 
 // --- VARIÁVEIS DE WAVE ---
@@ -20,7 +12,8 @@ float waveCooldownTimer = 0.0f;
 const float wavePrepTime = 15.0f; // segundos de preparação entre waves
 int enemiesSpawnedThisWave = 0;
 float enemyWaveSpawnTimer = 0.0f;
-const float enemyWaveSpawnInterval = 0.7f; // tempo entre cada spawn
+// Ajustado para um intervalo menor para mais inimigos
+const float enemyWaveSpawnInterval = 0.35f; // tempo entre cada spawn (era 0.7f)
 
 void ResetGame(Player *player, Enemy enemies[], Projectile projectiles[])
 {
@@ -36,6 +29,14 @@ void ResetGame(Player *player, Enemy enemies[], Projectile projectiles[])
     {
         projectiles[i].active = false;
     }
+    currentWave = 0;
+    enemiesToSpawn = 0;
+    enemiesAlive = 0;
+    inWave = false;
+    inPreparation = false;
+    waveCooldownTimer = 0.0f;
+    enemiesSpawnedThisWave = 0;
+    enemyWaveSpawnTimer = 0.0f;
 }
 
 int main()
@@ -57,7 +58,6 @@ int main()
     InitWindow(screenWidth, screenHeight, gameName);
     Image icon = LoadImage("assets/icon.png");
     SetWindowIcon(icon);
-    UnloadImage(icon);
     SetTargetFPS(60);
     CursorInit();
 
@@ -76,12 +76,13 @@ int main()
     float slotCooldowns[MAGIC_COUNT] = {0};
     const float slotCooldownBase[MAGIC_COUNT] = {5.0f, 5.0f, 5.0f};
 
-    //desenha estrelas caindo no menu
+    // desenha estrelas caindo
     Vector2 stars[100];
-    for (int i = 0; i < 100; i++) {
+    for (int i = 0; i < 100; i++)
+    {
         stars[i] = (Vector2){GetRandomValue(0, screenWidth), GetRandomValue(0, screenHeight)};
     }
-    //inicializa a câmera
+    // inicializa a câmera
     Camera2D camera = {0};
     camera.target = player.position;
     camera.offset = (Vector2){screenWidth / 2.0f, screenHeight / 2.0f};
@@ -90,13 +91,38 @@ int main()
 
     // deadzone para suavizar o movimento da câmera
     // X e Y da zona morta (bem pequena)
-    const float deadzoneWidth = 64.0f;  
-    const float deadzoneHeight = 32.0f; 
+    const float deadzoneWidth = 64.0f;
+    const float deadzoneHeight = 32.0f;
 
     Texture2D tile = LoadTexture("assets/sprites/ground_64x64.png");
+    Texture2D obscuraIcon = LoadTexture("assets/sprites/obscura.png");
+    Texture2D backGround = LoadTexture("assets/sprites/menu/Space Background(1).png");
 
-    static UpgradeMenuState upgradeMenuState = {0, 0, 0}; 
-    static bool upgradeMenuWasShown = false; 
+    static UpgradeMenuState upgradeMenuState = {0, 0, 0};
+    static bool upgradeMenuWasShown = false;
+
+    // Carregar frames do demônio animado (IDLE)
+    Texture2D demonIdleFrames[4];
+    demonIdleFrames[0] = LoadTexture("assets/sprites/demon/idle/IDLE-1.png");
+    demonIdleFrames[1] = LoadTexture("assets/sprites/demon/idle/IDLE-2.png");
+    demonIdleFrames[2] = LoadTexture("assets/sprites/demon/idle/IDLE-3.png");
+    demonIdleFrames[3] = LoadTexture("assets/sprites/demon/idle/IDLE-4.png");
+
+    Texture2D minionFrames[4];
+    minionFrames[0] = LoadTexture("assets/sprites/minion/minion-45x66-1.png");
+    minionFrames[1] = LoadTexture("assets/sprites/minion/minion-45x66-2.png");
+    minionFrames[2] = LoadTexture("assets/sprites/minion/minion-45x66-3.png");
+    minionFrames[3] = LoadTexture("assets/sprites/minion/minion-45x66-4.png");
+
+    Texture2D flameballFrames[4];
+    flameballFrames[0] = LoadTexture("assets/sprites/flameball/flameball-32x32-1.png");
+    flameballFrames[1] = LoadTexture("assets/sprites/flameball/flameball-32x32-2.png");
+    flameballFrames[2] = LoadTexture("assets/sprites/flameball/flameball-32x32-3.png");
+    flameballFrames[3] = LoadTexture("assets/sprites/flameball/flameball-32x32-4.png");
+
+    int flameballFrameCount = 4;
+    int demonIdleFrameCount = 4;
+    int minionFrameCount = 4;
 
     while (!WindowShouldClose())
     {
@@ -138,15 +164,17 @@ int main()
 
         switch (gameState)
         {
+        // no menu
         case GAME_MENU:
         {
-            StopMusicStream(gameOverMusic); 
+            StopMusicStream(gameOverMusic);
             gameOverMusicPlayed = false;
             ClearBackground(BLACK);
+            DrawTexture(backGround, 0, 0, WHITE);
+
             if (hudAlpha < 1.0f)
                 hudAlpha += dt * fadeSpeed;
 
-            // desenha estrelas caindo
             for (int i = 0; i < 100; i++)
             {
                 DrawPixelV(stars[i], WHITE);
@@ -156,9 +184,13 @@ int main()
             }
 
             float titleOffset = sin(GetTime() * 2) * 5; // efeito de bounce
-            DrawText("OBSCURA", screenWidth / 2 - MeasureText("OBSCURA", 60) / 2, screenHeight / 2 - 100 + titleOffset, 60, Fade(PURPLE, hudAlpha));
+                                                        // DrawText("OBSCURA", screenWidth / 2 - MeasureText("OBSCURA", 60) / 2, screenHeight / 2 - 100 + titleOffset, 60, Fade(PURPLE, hudAlpha));
+                                                        // Draw obscureIcon image
+            if (obscuraIcon.id == 0)
+                printf("Erro ao carregar a imagem!!!");
+            DrawTexture(obscuraIcon, screenWidth / 2 - obscuraIcon.width / 2, screenHeight / 2 - obscuraIcon.height / 2 - 200 - titleOffset, WHITE);
             DrawText("Desenvolvido por Felipe", screenWidth / 2 - MeasureText("Desenvolvido por Felipe", 20) / 2, screenHeight - 60, 20, Fade(DARKGRAY, hudAlpha));
-                static int menuSelected = 0;
+            static int menuSelected = 0;
             const char *menuItems[] = {"Iniciar Jogo", "Sair"};
             int menuCount = 2;
             int menuY = screenHeight / 2 + 20;
@@ -232,7 +264,7 @@ int main()
 
             break;
         }
-
+        // jogando
         case GAME_IS_PLAYING:
             StopMusicStream(menuMusic);
             UpdateMusicStream(gameMusic);
@@ -256,12 +288,16 @@ int main()
             // --- MAGIC SYSTEM ---
             MagicUpdate(&player, particles, magicCooldowns);
             // Atualiza slotCooldowns para refletir magicCooldowns (garante sincronismo com hotkeybar)
-            for (int i = 0; i < MAGIC_COUNT; i++) {
-                if (slotCooldowns[i] > 0.0f) slotCooldowns[i] -= GetFrameTime();
-                if (slotCooldowns[i] < magicCooldowns[i]) slotCooldowns[i] = magicCooldowns[i];
-                if (slotCooldowns[i] < 0.0f) slotCooldowns[i] = 0.0f;
+            for (int i = 0; i < MAGIC_COUNT; i++)
+            {
+                if (slotCooldowns[i] > 0.0f)
+                    slotCooldowns[i] -= GetFrameTime();
+                if (slotCooldowns[i] < magicCooldowns[i])
+                    slotCooldowns[i] = magicCooldowns[i];
+                if (slotCooldowns[i] < 0.0f)
+                    slotCooldowns[i] = 0.0f;
             }
-            // MAGIA DE ATAQUE 
+            // MAGIA DE ATAQUE
             if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT) && slotCooldowns[0] <= 0.0f)
             {
                 Vector2 mouseScreen = GetMousePosition();
@@ -286,7 +322,8 @@ int main()
                     slotCooldowns[2] = slotCooldownBase[2];
             }
             // Atualiza magicCooldowns para refletir slotCooldowns (garante sincronismo com hotkeybar)
-            for (int i = 0; i < MAGIC_COUNT; i++) {
+            for (int i = 0; i < MAGIC_COUNT; i++)
+            {
                 magicCooldowns[i] = slotCooldowns[i];
             }
             for (int i = 0; i < MAX_PROJECTILES; i++)
@@ -307,7 +344,8 @@ int main()
                     currentWave++;
                     inWave = true;
                     inPreparation = false;
-                    enemiesToSpawn = 5 + currentWave * 3;
+                    // Aumenta a base de inimigos e o multiplicador por wave
+                    enemiesToSpawn = 10 + currentWave * 5; // era 5 + currentWave * 3
                     enemiesAlive = 0;
                     enemiesSpawnedThisWave = 0;
                     enemyWaveSpawnTimer = 0.0f;
@@ -316,12 +354,14 @@ int main()
                 else
                 {
                     // Menu de upgrades disponível durante preparação
-                    if (!upgradeMenuWasShown && player.skillPoints > 0) {
+                    if (!upgradeMenuWasShown && player.skillPoints > 0)
+                    {
                         upgradeMenuState.visible = 1; // Show the upgrade menu
                         upgradeMenuWasShown = true;
                     }
                     // Handle input for the upgrade menu
-                    if (upgradeMenuState.visible) {
+                    if (upgradeMenuState.visible)
+                    {
                         UIHandleUpgradeMenuInput(&player, &upgradeMenuState);
                     }
                 }
@@ -359,9 +399,10 @@ int main()
                         } while (Vector2Distance(spawnPos, (Vector2){player.position.x + player.size.x / 2, player.position.y + player.size.y / 2}) < safeDist && tries < 10);
                         EnemyType type = ENEMY_TYPE_NORMAL;
                         int chance = GetRandomValue(1, 100);
-                        if (chance > 80 + currentWave)
+                        // Ajustar chances para balancear os tipos de inimigos com mais densidade
+                        if (chance > 70 - currentWave * 2) // Mais chance de STRONG em waves altas
                             type = ENEMY_TYPE_STRONG;
-                        else if (chance > 60 + currentWave)
+                        else if (chance > 45 - currentWave * 2) // Mais chance de FAST em waves altas
                             type = ENEMY_TYPE_FAST;
                         SpawnEnemy(enemies, spawnPos, type);
                         enemiesSpawnedThisWave++;
@@ -405,11 +446,11 @@ int main()
                             Rectangle enemyRec = {enemies[j].position.x, enemies[j].position.y, enemies[j].size.x, enemies[j].size.y};
                             if (CheckCollisionCircleRec(projectiles[i].position, projectiles[i].radius, enemyRec))
                             {
-                                TakeDamageEnemy(&enemies[j], projectiles[i].damage);
-                                if (!enemies[j].active && enemies[j].health <= 0)
-                                {
-                                    PlayerGainXP(&player, enemies[j].xpReward, enemies, MAX_ENEMIES);
-                                }
+                                // Passar o array de partículas para TakeDamageEnemy
+                                TakeDamageEnemy(&enemies[j], projectiles[i].damage, particles);
+                                // Remover a chamada direta para PlayerGainXP.
+                                // O XP agora é concedido pela coleta de orbs (PlayerCollectXPOrbs)
+                                // e o orb é dropado dentro de TakeDamageEnemy.
                                 projectiles[i].active = false;
                                 break;
                             }
@@ -438,12 +479,30 @@ int main()
                 }
             }
             UpdateParticles(particles, MAX_PARTICLES);
+            PlayerCollectXPOrbs(&player, particles, MAX_PARTICLES, enemies, MAX_ENEMIES); // Add this call
             DrawParticles(particles, MAX_PARTICLES);
             for (int i = 0; i < MAX_PROJECTILES; i++)
-                DrawProjectile(projectiles[i]);
+                DrawProjectile(projectiles[i], flameballFrames, flameballFrameCount, WHITE);
             for (int i = 0; i < MAX_ENEMIES; i++)
                 if (enemies[i].active)
-                    DrawEnemy(enemies[i]);
+                {
+                    if (enemies[i].type == ENEMY_TYPE_NORMAL)
+                    {
+                        DrawEnemy(enemies[i], minionFrames, minionFrameCount, WHITE); // Normal minion
+                    }
+                    else if (enemies[i].type == ENEMY_TYPE_STRONG)
+                    {
+                        DrawEnemy(enemies[i], minionFrames, minionFrameCount, Fade(RED, 0.7f)); // Tanque minion com efeito vermelho
+                    }
+                    else if (enemies[i].type == ENEMY_TYPE_FAST)
+                    {
+                        DrawEnemy(enemies[i], demonIdleFrames, demonIdleFrameCount, YELLOW); // Demon rápido
+                    }
+                    else // Fallback para outros tipos
+                    {
+                        DrawEnemy(enemies[i], NULL, 0, WHITE);
+                    }
+                }
             EndMode2D();
             UIDrawHUD(&player, currentWave, enemiesAlive, waveCooldownTimer, inWave);
             UIDrawHotkeyBar(screenWidth, screenHeight, magicCooldowns, MAGIC_COUNT);
@@ -521,8 +580,14 @@ int main()
     UnloadMusicStream(menuMusic);
     UnloadMusicStream(gameMusic);
     UnloadMusicStream(gameOverMusic);
-    UnloadTexture(tile); // Libera textura do fundo
-    AudioUnload();       // Libera recursos de áudio
+    UnloadTexture(tile);
+    UnloadTexture(obscuraIcon);
+    for (int i = 0; i < 4; i++) UnloadTexture(minionFrames[i]);
+    for (int i = 0; i < demonIdleFrameCount; i++) UnloadTexture(demonIdleFrames[i]);
+    for (int i = 0; i < flameballFrameCount; i++) UnloadTexture(flameballFrames[i]);
+    UnloadTexture(backGround);
+    UnloadImage(icon);
+    AudioUnload();
     CursorUnload();
     CloseWindow();
     return 0;

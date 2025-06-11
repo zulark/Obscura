@@ -22,4 +22,4 @@ void AudioSetSoundPitch(SoundID id, float pitch);
 void AudioUpdate();
 void AudioUnload();
 
-#endif // AUDIO_H
+#endif

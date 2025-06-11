@@ -17,11 +17,11 @@ typedef struct Projectile {
     float traveledDistance; // distância já percorrida
 } Projectile;
 
-void ShootProjectile(Projectile projectiles[], int projectileIndex, Vector2 startPosition, Vector2 targetPosition);
+void ShootProjectile(Projectile projectiles[], int projectileIndex, Vector2 startPosition, Vector2 targetPosition, int attackDamage);
 
 void UpdateProjectile(Projectile *projectile);
 
-void DrawProjectile(Projectile projectile);
+void DrawProjectile(Projectile projectile, Texture2D *attackFrames, int attackFrameCount, Color tint);
 
 void InitProjectiles(Projectile projectiles[], int maxProjectiles);
 

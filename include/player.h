@@ -28,6 +28,7 @@ typedef struct Player {
     float levelUpArcProgress;
     float attackSpeed;
     float attackRange;
+    int attackDamage;
     // struct SkillTree *skills; // Para integração futura
 } Player;
 
@@ -41,13 +42,15 @@ void DrawPlayer(Player player);
 
 void TakeDamagePlayer(Player *player, int damageDealt, EnemyType type);
 
-void PlayerGainXP(Player *player, int xp, Enemy enemies[], int maxEnemies);
+void PlayerGainXP(Player *player, int xp);
 
 void PlayerLevelUp(Player *player, Enemy enemies[], int maxEnemies);
 
 void PlayerTryShoot(Player *player, Projectile projectiles[], Camera2D camera);
 
 void DrawPlayerLevelUpEffects(Player *player);
+
+void PlayerCollectXPOrbs(Player *player, Particle *particles, int maxParticles, Enemy *enemies, int maxEnemies);
 
 #endif
 

@@ -13,15 +13,13 @@ typedef struct UpgradeMenuState {
 void UIInit();
 void UIDrawHUD(const Player *player, int currentWave, int enemiesAlive, float waveCooldownTimer, bool inWave);
 void UIDrawHotkeyBar(int width, int height, const float *cooldowns, int numSlots);
-// Changed UIDrawMenu to accept parameters needed for drawing the main menu
-void UIDrawMenu(int selectedOption, float hudAlpha, float titleOffset);
+void UIDrawMenu(Texture2D obscuraIcon, float hudAlpha, float titleOffset);
 void UIDrawGameOver();
 void UIShowMessage(const char *msg, float duration);
 void UIShowFloatingMsg(const char *msg, Vector2 pos, Color color, float duration);
 void UIUpdateFloatingMsgs(void);
 void UIDrawFloatingMsgs(void);
-
-// Declarations for the Upgrade Menu functions
+void DrawCrystal(Vector2 center, float size, Color color);
 void UIDrawUpgradeMenu(const Player *player, const UpgradeMenuState *menuState);
 int UIHandleUpgradeMenuInput(Player *player, UpgradeMenuState *menuState); 
 void UIDrawPauseScreen(void);

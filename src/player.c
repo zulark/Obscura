@@ -20,7 +20,7 @@ Player InitPlayer(float startX, float startY)
     player.level = 1;
     player.skillPoints = 0;
     player.alive = true;
-    player.shootCooldown = 0.20f;
+    player.shootCooldown = 0.35f;
     player.shootTimer = 0.0;
     player.invencibilityTimer = 0.0f;
     player.levelUpTextTimer = 0.0f;
@@ -30,6 +30,7 @@ Player InitPlayer(float startX, float startY)
     player.barrierActive = false;
     player.attackSpeed = 600.0f; // velocidade do projétil (pixels/seg)
     player.attackRange = 400.0f;
+    player.attackDamage = 25;
     return player;
 }
 
@@ -82,8 +83,8 @@ void PlayerTryShoot(Player *player, Projectile projectiles[], Camera2D camera)
             {
                 if (!projectiles[i].active)
                 {
-                    ShootProjectile(projectiles, i, shootPosition, targetPosition);
-                    projectiles[i].color = DARKPURPLE;
+                    ShootProjectile(projectiles, i, shootPosition, targetPosition, player->attackDamage);
+                    // projectiles[i].color = SKYBLUE;
                     projectiles[i].speed = player->attackSpeed; // velocidade fixa do projétil
                     projectiles[i].maxDistance = player->attackRange;
                     projectiles[i].traveledDistance = 0.0f;
@@ -99,8 +100,10 @@ void PlayerTryShoot(Player *player, Projectile projectiles[], Camera2D camera)
 // Adiciona controle de dano por tipo de inimigo
 static bool enemyTypeHit[ENEMY_TYPE_COUNT] = {0};
 
-void ResetEnemyTypeHit() {
-    for (int i = 0; i < ENEMY_TYPE_COUNT; i++) enemyTypeHit[i] = false;
+void ResetEnemyTypeHit()
+{
+    for (int i = 0; i < ENEMY_TYPE_COUNT; i++)
+        enemyTypeHit[i] = false;
 }
 
 void TakeDamagePlayer(Player *player, int damageAmount, EnemyType type)
@@ -108,13 +111,16 @@ void TakeDamagePlayer(Player *player, int damageAmount, EnemyType type)
     if (player->alive == false)
         return;
     // Corrigido: barreira mágica ignora dano completamente
-    if (player->barrierActive) {
+    if (player->barrierActive)
+    {
         return;
     }
     if (player->invencibilityTimer > 0.0f && enemyTypeHit[type])
         return;
-    if (player->invencibilityTimer <= 0.0f) {
-        for (int i = 0; i < ENEMY_TYPE_COUNT; i++) enemyTypeHit[i] = false;
+    if (player->invencibilityTimer <= 0.0f)
+    {
+        for (int i = 0; i < ENEMY_TYPE_COUNT; i++)
+            enemyTypeHit[i] = false;
     }
     enemyTypeHit[type] = true;
     player->invencibilityTimer = 1.0f;
@@ -127,7 +133,7 @@ void TakeDamagePlayer(Player *player, int damageAmount, EnemyType type)
         char txt[32];
         snprintf(txt, sizeof(txt), "-%d HP", damageAmount);
         float textWidth = MeasureText(txt, 22);
-        Vector2 pos = { (screenWidth / 2.0f) - (textWidth / 2.0f), screenHeight / 2.0f - 50.0f };
+        Vector2 pos = {(screenWidth / 2.0f) - (textWidth / 2.0f), screenHeight / 2.0f - 50.0f};
         UIShowFloatingMsg(txt, pos, RED, 1.0f);
         if (player->health <= 0)
         {
@@ -153,15 +159,19 @@ void UpdatePlayer(Player *player)
     }
 
     // Atualiza timers de level up
-    if (player->levelUpTextTimer > 0.0f) {
+    if (player->levelUpTextTimer > 0.0f)
+    {
         player->levelUpTextTimer -= dt;
-        if (player->levelUpTextTimer < 0.0f) player->levelUpTextTimer = 0.0f;
+        if (player->levelUpTextTimer < 0.0f)
+            player->levelUpTextTimer = 0.0f;
     }
-    if (player->levelUpArcTimer > 0.0f) {
+    if (player->levelUpArcTimer > 0.0f)
+    {
         player->levelUpArcTimer -= dt;
         // Progresso de 0.0 a 1.0
         player->levelUpArcProgress = 1.0f - (player->levelUpArcTimer / 0.7f);
-        if (player->levelUpArcTimer < 0.0f) {
+        if (player->levelUpArcTimer < 0.0f)
+        {
             player->levelUpArcTimer = 0.0f;
             player->levelUpArcProgress = 0.0f;
         }
@@ -193,44 +203,77 @@ void DrawPlayer(Player player)
     }
     else
     {
-         DrawRectangleV(player.position, player.size, playerDrawColor);
+        DrawRectangleV(player.position, player.size, playerDrawColor);
     }
 
     // Efeito visual da barreira: bolha translúcida
-    if (player.barrierActive) {
-        Vector2 center = {player.position.x + player.size.x/2, player.position.y + player.size.y/2};
+    if (player.barrierActive)
+    {
+        Vector2 center = {player.position.x + player.size.x / 2, player.position.y + player.size.y / 2};
         float barrierRadius = player.size.x * 1.5f;
         Color barrierColor = (Color){80, 180, 255, 90}; // Azul claro translúcido
         DrawCircleV(center, barrierRadius, barrierColor);
     }
 }
 
-// Ganha experiência
-void PlayerGainXP(Player *player, int xp, Enemy enemies[], int maxEnemies)
+// Função para adicionar XP ao jogador
+// A lógica de verificar o level up e chamar PlayerLevelUp agora está em PlayerCollectXPOrbs
+void PlayerGainXP(Player *player, int xp)
 {
-    player->experience += xp;
-    int xpToNextLevel = 50 + (player->level - 1) * 50;
-    // Ganha níveis enquanto tiver XP suficiente
-    while (player->experience >= xpToNextLevel)
+    if (!player || !player->alive)
     {
-        player->experience -= xpToNextLevel;
-        PlayerLevelUp(player, enemies, maxEnemies);
-        xpToNextLevel = 50 + (player->level - 1) * 50;
+        return;
+    }
+    player->experience += xp;
+    // Log para depuração (opcional, remover em produção)
+    // TraceLog(LOG_INFO, "Player gained %d XP. Total XP: %d", xp, player->experience); 
+}
+
+void PlayerCollectXPOrbs(Player *player, Particle *particles, int maxParticles, Enemy *enemies, int maxEnemies) {
+    for (int i = 0; i < maxParticles; i++) {
+        // Modificado para verificar o tipo da partícula em vez da cor
+        if (particles[i].active && particles[i].type == PARTICLE_TYPE_XP_ORB) { 
+            Vector2 playerCenter = {player->position.x + player->size.x / 2, player->position.y + player->size.y / 2};
+            float dist = Vector2Distance(particles[i].position, playerCenter);
+            // O raio de coleta pode ser ajustado. Usar o raio da partícula e um pouco do tamanho do jogador.
+            float collectRadius = player->size.x * 0.6f + particles[i].radius; 
+            if (dist < collectRadius) {
+                int xpGained = particles[i].xpValue; // Pega o XP do orb
+                player->experience += xpGained; 
+                particles[i].active = false;
+                char xpText[16];
+                snprintf(xpText, sizeof(xpText), "+%d XP", xpGained);
+                UIShowFloatingMsg(xpText, particles[i].position, GOLD, 1.0f);
+                AudioPlaySound(SOUND_MAGIC_PICKUP);
+                
+                // Checa level up
+                int xpToNextLevel = 50 + (player->level - 1) * 35;
+                while (player->experience >= xpToNextLevel) {
+                    player->experience -= xpToNextLevel;
+                    PlayerLevelUp(player, enemies, maxEnemies);
+                    xpToNextLevel = 50 + (player->level - 1) * 35; 
+                }
+            }
+        }
     }
 }
 
 // Ao upar, apenas recupera vida/mana, não aumenta atributos automaticamente
-void PlayerLevelUp(Player *player, Enemy enemies[], int maxEnemies){
+void PlayerLevelUp(Player *player, Enemy enemies[], int maxEnemies)
+{
     player->level++;
     player->health = player->maxHealth;
     player->mana = player->maxMana;
     player->skillPoints++;
     player->invencibilityTimer = 2.0f; // 2 segundos de invencibilidade
     float killRadius = 350.0f;
-    for (int i = 0; i < maxEnemies; i++) {
-        if (enemies[i].active) {
+    for (int i = 0; i < maxEnemies; i++)
+    {
+        if (enemies[i].active)
+        {
             float dist = Vector2Distance(player->position, enemies[i].position);
-            if (dist < killRadius) {
+            if (dist < killRadius)
+            {
                 enemies[i].health = 0;
                 enemies[i].active = false;
                 AudioPlaySound(SOUND_ENEMY_DEATH);
@@ -244,29 +287,33 @@ void PlayerLevelUp(Player *player, Enemy enemies[], int maxEnemies){
     AudioSetSoundVolume(SOUND_LEVELUP, 0.3f);
 }
 
-void DrawPlayerLevelUpEffects(Player *player) {
+void DrawPlayerLevelUpEffects(Player *player)
+{
     // Arco azul
-    if (player->levelUpArcTimer > 0.0f) {
-        float centerX = player->position.x + player->size.x/2;
-        float centerY = player->position.y + player->size.y/2;
+    if (player->levelUpArcTimer > 0.0f)
+    {
+        float centerX = player->position.x + player->size.x / 2;
+        float centerY = player->position.y + player->size.y / 2;
         float minRadius = player->size.x * 0.7f;
         float maxRadius = player->size.x * 1.7f;
         float radius = minRadius + (maxRadius - minRadius) * player->levelUpArcProgress;
         int arcCount = 3;
-        for (int i = 0; i < arcCount; i++) {
+        for (int i = 0; i < arcCount; i++)
+        {
             float startAngle = 120.0f * i + player->levelUpArcProgress * 60.0f;
-            DrawRing((Vector2){centerX, centerY}, radius, radius+6, startAngle, startAngle+60, 64, Fade(BLUE, 180));
+            DrawRing((Vector2){centerX, centerY}, radius, radius + 6, startAngle, startAngle + 60, 64, Fade(BLUE, 180));
         }
     }
     // Texto
-    if (player->levelUpTextTimer > 0.0f) {
+    if (player->levelUpTextTimer > 0.0f)
+    {
         float alpha = (player->levelUpTextTimer > 0.3f) ? 1.0f : player->levelUpTextTimer / 0.3f;
         int fontSize = 32;
-        const char* txt = "LEVEL UP!";
+        const char *txt = "LEVEL UP!";
         int textWidth = MeasureText(txt, fontSize);
-        float centerX = player->position.x + player->size.x/2;
+        float centerX = player->position.x + player->size.x / 2;
         float y = player->position.y - 32 - (1.0f - alpha) * 20.0f;
-        DrawText(txt, (int)(centerX - textWidth/2), (int)y, fontSize, Fade(SKYBLUE, (unsigned char)(255*alpha)));
+        DrawText(txt, (int)(centerX - textWidth / 2), (int)y, fontSize, Fade(SKYBLUE, (unsigned char)(255 * alpha)));
     }
 }
 
@@ -313,4 +360,3 @@ void DrawPlayerLevelUpEffects(Player *player) {
 //         }
 //     }
 // }
-

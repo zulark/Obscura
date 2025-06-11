@@ -18,6 +18,7 @@ typedef struct {
     float cooldown;
     float currentCooldown;
     int unlocked;
+    ParticleType effectType;
 } Magic;
 
 void MagicInit();
@@ -26,4 +27,4 @@ int MagicCast(Player *player, int slot, Particle *particles, Vector2 targetPos, 
 int MagicIsUnlocked(int magicId);
 void MagicUnlock(int magicId);
 
-#endif // MAGIC_H
+#endif
