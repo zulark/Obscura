@@ -29,6 +29,11 @@ typedef struct Player {
     float attackSpeed;
     float attackRange;
     int attackDamage;
+    int currentFrame;
+    float frameTime;
+    float frameSpeed;
+    int maxFrames;
+    bool facingRight; // Novo campo para direção do sprite
     // struct SkillTree *skills; // Para integração futura
 } Player;
 
@@ -38,7 +43,7 @@ void HandlePlayerInput(Player *player);
 
 void UpdatePlayer(Player *player);
 
-void DrawPlayer(Player player);
+void DrawPlayer(Player player, Texture2D *frames, int frameCount);
 
 void TakeDamagePlayer(Player *player, int damageDealt, EnemyType type);
 

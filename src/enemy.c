@@ -28,13 +28,13 @@ void SpawnEnemy(Enemy enemies[], Vector2 position, EnemyType type)
             Enemy enemy = {0}; // Inicializa para zerar todos os campos
             enemy.active = true;
             enemy.position = position;
-            enemy.previousPosition = position; // Inicializa previousPosition
+            enemy.previousPosition = position; 
             enemy.type = type;
-            enemy.facingRight = (GetRandomValue(0, 1) == 1); // Direção inicial aleatória
+            enemy.facingRight = (GetRandomValue(0, 1) == 1);
 
             switch (type)
             {
-            case ENEMY_TYPE_NORMAL: // Demônio (Normal)
+            case ENEMY_TYPE_NORMAL:                    // Demônio (Normal)
                 enemy.size = (Vector2){67.0f, 100.0f}; // Tamanho do sprite do demônio
                 enemy.color = RED;
                 enemy.speed = 100.0f;
@@ -47,7 +47,7 @@ void SpawnEnemy(Enemy enemies[], Vector2 position, EnemyType type)
                 enemy.frameSpeed = 1.0f / 8.0f; // Animação a 8 FPS
                 enemy.maxFrames = 4;            // 4 quadros de animação
                 break;
-            case ENEMY_TYPE_FAST: // Demônio (Rápido, Menor)
+            case ENEMY_TYPE_FAST:                     // Demônio (Rápido, Menor)
                 enemy.size = (Vector2){64.0f, 64.0f}; // Sprite de demônio menor
                 enemy.color = YELLOW;
                 enemy.speed = 150.0f; // Movimento mais rápido
@@ -58,9 +58,9 @@ void SpawnEnemy(Enemy enemies[], Vector2 position, EnemyType type)
                 enemy.currentFrame = 0;
                 enemy.frameTime = 0.0f;
                 enemy.frameSpeed = 1.0f / 12.0f; // Animação a 12 FPS
-                enemy.maxFrames = 4;              // 4 quadros de animação
+                enemy.maxFrames = 4;             // 4 quadros de animação
                 break;
-            case ENEMY_TYPE_STRONG: // Slime (Forte)
+            case ENEMY_TYPE_STRONG:                    // Slime (Forte)
                 enemy.size = (Vector2){90.0f, 132.0f}; // Tamanho do sprite do slime
                 enemy.color = DARKGREEN;               // Cor de slime mais forte
                 enemy.speed = 50.0f;                   // Movimento mais lento
@@ -72,6 +72,24 @@ void SpawnEnemy(Enemy enemies[], Vector2 position, EnemyType type)
                 enemy.frameTime = 0.0f;
                 enemy.frameSpeed = 1.0f / 8.0f; // Animação a 8 FPS
                 enemy.maxFrames = 4;            // 4 quadros de animação
+                break;
+            case ENEMY_TYPE_BOSS:
+                enemy.size = (Vector2){256.0f, 256.0f}; // Ajuste conforme sprite
+                enemy.color = PURPLE;
+                enemy.speed = 60.0f;
+                enemy.maxHealth = 2000;
+                enemy.health = enemy.maxHealth;
+                enemy.attackDamage = 50;
+                enemy.xpReward = 1000;
+                enemy.currentFrame = 0;
+                enemy.frameTime = 0.0f;
+                enemy.frameSpeed = 1.0f / 6.0f;
+                enemy.maxFrames = 8; // Supondo 8 sprites
+                // Inicializa campos de boss
+                enemy.specialAttackTimer = 0.0f;
+                enemy.bossPhase = 1;
+                enemy.isChargingAttack = false;
+                enemy.chargeProgress = 0.0f;
                 break;
             default:
                 enemies[i].size = (Vector2){25.0f, 25.0f};
@@ -137,6 +155,31 @@ void UpdateEnemy(Enemy *enemy, Vector2 targetPosition)
         enemy->facingRight = false;
     }
     // Se não houve movimento horizontal, mantém a direção anterior
+
+    // Lógica especial para boss
+    if (enemy->type == ENEMY_TYPE_BOSS)
+    {
+        // Exemplo: timer para ataque especial
+        enemy->specialAttackTimer += GetFrameTime();
+        if (!enemy->isChargingAttack && enemy->specialAttackTimer > 3.0f)
+        {
+            enemy->isChargingAttack = true;
+            enemy->chargeProgress = 0.0f;
+            // Aqui pode iniciar animação de carregamento
+        }
+        if (enemy->isChargingAttack)
+        {
+            enemy->chargeProgress += GetFrameTime();
+            if (enemy->chargeProgress > 1.5f)
+            {
+                // Dispara ataque especial (ex: área, chuva de projéteis, etc)
+                // TODO: Implementar Spawn de partículas/projéteis/minions
+                enemy->isChargingAttack = false;
+                enemy->specialAttackTimer = 0.0f;
+            }
+        }
+        // TODO: Implementar mudança de fase, ataques diferentes, etc
+    }
 }
 
 // Aplica dano ao inimigo
@@ -186,9 +229,9 @@ void DrawEnemy(Enemy enemy, Texture2D *idleFrames, int idleFrameCount, Color tin
     DrawTexturePro(currentFrameTexture, sourceRec, destRec, origin, 0.0f, tint);
 
     // Desenhar hitbox para depuração (opcional)
-    DrawRectangleLines(enemy.position.x, enemy.position.y, enemy.size.x, enemy.size.y, LIME);
+    // DrawRectangleLines(enemy.position.x, enemy.position.y, enemy.size.x, enemy.size.y, LIME);
     // Barra de vida
-    if (enemy.health < enemy.maxHealth)
+    if (enemy.health < enemy.maxHealth && enemy.type != ENEMY_TYPE_BOSS)
     {
         int healthBarWidth = 50;
         int healthBarHeight = 5;

@@ -1,4 +1,5 @@
 #include <config.h>
+#include "boss.h"
 
 GameState gameState = GAME_MENU;
 
@@ -38,6 +39,9 @@ void ResetGame(Player *player, Enemy enemies[], Projectile projectiles[])
     enemiesSpawnedThisWave = 0;
     enemyWaveSpawnTimer = 0.0f;
 }
+
+Texture2D playerFrames[8];
+int playerFramesCount = 8;
 
 int main()
 {
@@ -101,7 +105,7 @@ int main()
     static UpgradeMenuState upgradeMenuState = {0, 0, 0};
     static bool upgradeMenuWasShown = false;
 
-    // Carregar frames do demônio animado (IDLE)
+    // Carregar frames dos personagens e afins
     Texture2D demonIdleFrames[4];
     demonIdleFrames[0] = LoadTexture("assets/sprites/demon/idle/IDLE-1.png");
     demonIdleFrames[1] = LoadTexture("assets/sprites/demon/idle/IDLE-2.png");
@@ -114,21 +118,42 @@ int main()
     minionFrames[2] = LoadTexture("assets/sprites/minion/minion-45x66-3.png");
     minionFrames[3] = LoadTexture("assets/sprites/minion/minion-45x66-4.png");
 
-    Texture2D flameballFrames[4];
-    flameballFrames[0] = LoadTexture("assets/sprites/flameball/flameball-32x32-1.png");
-    flameballFrames[1] = LoadTexture("assets/sprites/flameball/flameball-32x32-2.png");
-    flameballFrames[2] = LoadTexture("assets/sprites/flameball/flameball-32x32-3.png");
-    flameballFrames[3] = LoadTexture("assets/sprites/flameball/flameball-32x32-4.png");
+    Texture2D playerFrames[8];
+    playerFrames[0] = LoadTexture("assets/sprites/player/player-1.png");
+    playerFrames[1] = LoadTexture("assets/sprites/player/player-2.png");
+    playerFrames[2] = LoadTexture("assets/sprites/player/player-3.png");
+    playerFrames[3] = LoadTexture("assets/sprites/player/player-4.png");
+    playerFrames[4] = LoadTexture("assets/sprites/player/player-5.png");
+    playerFrames[5] = LoadTexture("assets/sprites/player/player-6.png");
+    playerFrames[6] = LoadTexture("assets/sprites/player/player-7.png");
+    playerFrames[7] = LoadTexture("assets/sprites/player/player-8.png");
 
-    int flameballFrameCount = 4;
+    Texture2D flameballFrames[4];
+    flameballFrames[0] = LoadTexture("assets/sprites/player/flameball/flameball-32x32-1.png");
+    flameballFrames[1] = LoadTexture("assets/sprites/player/flameball/flameball-32x32-2.png");
+    flameballFrames[2] = LoadTexture("assets/sprites/player/flameball/flameball-32x32-3.png");
+    flameballFrames[3] = LoadTexture("assets/sprites/player/flameball/flameball-32x32-4.png");
+
+    Texture2D bossFrames[8];
+    bossFrames[0] = LoadTexture("assets/sprites/boss/boss-1.png");
+    bossFrames[1] = LoadTexture("assets/sprites/boss/boss-2.png");
+    bossFrames[2] = LoadTexture("assets/sprites/boss/boss-3.png");
+    bossFrames[3] = LoadTexture("assets/sprites/boss/boss-4.png");
+    bossFrames[4] = LoadTexture("assets/sprites/boss/boss-5.png");
+    bossFrames[5] = LoadTexture("assets/sprites/boss/boss-6.png");
+    bossFrames[6] = LoadTexture("assets/sprites/boss/boss-7.png");
+    bossFrames[7] = LoadTexture("assets/sprites/boss/boss-8.png");
+    
     int demonIdleFrameCount = 4;
     int minionFrameCount = 4;
-
+    int bossFrameCount = 8;
+    int playerFrameCount = 8;
+    int flameballFrameCount = 4;
     while (!WindowShouldClose())
     {
         UpdateMusicStream(menuMusic);
         SetMusicVolume(menuMusic, 0.6f);
-        SetMusicPitch(menuMusic, 0.8f);
+        // SetMusicPitch(menuMusic, 0.8f);
         static bool gameOverMusicPlayed = false;
         // --- DEADZONE DA CÂMERA ---
         float halfScreenW = screenWidth / 2.0f;
@@ -210,7 +235,7 @@ int main()
                 if (CheckCollisionPointRec(GetMousePosition(), itemRect))
                     menuSelected = i;
 
-                Color color = (i == menuSelected) ? DARKPURPLE : GRAY;
+                Color color = (i == menuSelected) ? PURPLE : GRAY;
                 DrawText(menuItems[i], screenWidth / 2 - textWidth / 2, itemY, 30, Fade(color, hudAlpha));
             }
 
@@ -281,7 +306,7 @@ int main()
                     DrawTexture(tile, x, y, WHITE);
                 }
             }
-            DrawPlayer(player);
+            DrawPlayer(player, playerFrames, playerFramesCount);
             DrawPlayerLevelUpEffects(&player);
             UpdatePlayer(&player);
             PlayerTryShoot(&player, projectiles, camera);
@@ -368,57 +393,89 @@ int main()
             }
             if (inWave)
             {
-                // Spawn progressivo dos inimigos
-                if (enemiesSpawnedThisWave < enemiesToSpawn)
+                // --- WAVE DE BOSS ---
+                if (currentWave > 0 && currentWave % 5 == 0)
                 {
-                    enemyWaveSpawnTimer -= GetFrameTime();
-                    if (enemyWaveSpawnTimer <= 0.0f)
+                    // Se não há boss ativo, spawna um
+                    bool bossActive = false;
+                    for (int i = 0; i < MAX_ENEMIES; i++)
                     {
-                        int edge = GetRandomValue(0, 3);
-                        Vector2 spawnPos;
-                        float safeDist = 400.0f;
-                        int tries = 0;
-                        do
-                        {
-                            switch (edge)
-                            {
-                            case 0:
-                                spawnPos = (Vector2){(float)GetRandomValue(0, WORLD_WIDTH), -60.0f};
-                                break;
-                            case 1:
-                                spawnPos = (Vector2){(float)GetRandomValue(0, WORLD_WIDTH), WORLD_HEIGHT + 60.0f};
-                                break;
-                            case 2:
-                                spawnPos = (Vector2){-60.0f, (float)GetRandomValue(0, WORLD_HEIGHT)};
-                                break;
-                            case 3:
-                                spawnPos = (Vector2){WORLD_WIDTH + 60.0f, (float)GetRandomValue(0, WORLD_HEIGHT)};
-                                break;
-                            }
-                            tries++;
-                        } while (Vector2Distance(spawnPos, (Vector2){player.position.x + player.size.x / 2, player.position.y + player.size.y / 2}) < safeDist && tries < 10);
-                        EnemyType type = ENEMY_TYPE_NORMAL;
-                        int chance = GetRandomValue(1, 100);
-                        // Ajustar chances para balancear os tipos de inimigos com mais densidade
-                        if (chance > 70 - currentWave * 2) // Mais chance de STRONG em waves altas
-                            type = ENEMY_TYPE_STRONG;
-                        else if (chance > 45 - currentWave * 2) // Mais chance de FAST em waves altas
-                            type = ENEMY_TYPE_FAST;
-                        SpawnEnemy(enemies, spawnPos, type);
-                        enemiesSpawnedThisWave++;
-                        enemyWaveSpawnTimer = enemyWaveSpawnInterval;
+                        if (enemies[i].active && enemies[i].type == ENEMY_TYPE_BOSS)
+                            bossActive = true;
+                    }
+                    if (!bossActive && enemiesSpawnedThisWave == 0)
+                    {
+                        Vector2 bossPos = {WORLD_WIDTH / 2 - 128, WORLD_HEIGHT / 2 - 128};
+                        InitBoss(&enemies[0], bossPos);
+                        enemiesSpawnedThisWave = 1;
+                        enemiesToSpawn = 1;
+                    }
+                    // Conta inimigos vivos
+                    enemiesAlive = 0;
+                    for (int i = 0; i < MAX_ENEMIES; i++)
+                        if (enemies[i].active)
+                            enemiesAlive++;
+                    if (enemiesAlive == 0 && enemiesSpawnedThisWave == enemiesToSpawn)
+                    {
+                        inWave = false;
+                        inPreparation = true;
+                        waveCooldownTimer = wavePrepTime;
                     }
                 }
-                // Conta inimigos vivos
-                enemiesAlive = 0;
-                for (int i = 0; i < MAX_ENEMIES; i++)
-                    if (enemies[i].active)
-                        enemiesAlive++;
-                if (enemiesAlive == 0 && enemiesSpawnedThisWave == enemiesToSpawn)
+                else
                 {
-                    inWave = false;
-                    inPreparation = true;
-                    waveCooldownTimer = wavePrepTime;
+                    // Spawn progressivo dos inimigos
+                    if (enemiesSpawnedThisWave < enemiesToSpawn)
+                    {
+                        enemyWaveSpawnTimer -= GetFrameTime();
+                        if (enemyWaveSpawnTimer <= 0.0f)
+                        {
+                            int edge = GetRandomValue(0, 3);
+                            Vector2 spawnPos;
+                            float safeDist = 400.0f;
+                            int tries = 0;
+                            do
+                            {
+                                switch (edge)
+                                {
+                                case 0:
+                                    spawnPos = (Vector2){(float)GetRandomValue(0, WORLD_WIDTH), -60.0f};
+                                    break;
+                                case 1:
+                                    spawnPos = (Vector2){(float)GetRandomValue(0, WORLD_WIDTH), WORLD_HEIGHT + 60.0f};
+                                    break;
+                                case 2:
+                                    spawnPos = (Vector2){-60.0f, (float)GetRandomValue(0, WORLD_HEIGHT)};
+                                    break;
+                                case 3:
+                                    spawnPos = (Vector2){WORLD_WIDTH + 60.0f, (float)GetRandomValue(0, WORLD_HEIGHT)};
+                                    break;
+                                }
+                                tries++;
+                            } while (Vector2Distance(spawnPos, (Vector2){player.position.x + player.size.x / 2, player.position.y + player.size.y / 2}) < safeDist && tries < 10);
+                            EnemyType type = ENEMY_TYPE_NORMAL;
+                            int chance = GetRandomValue(1, 100);
+                            // Ajustar chances para balancear os tipos de inimigos com mais densidade
+                            if (chance > 70 - currentWave * 2) // Mais chance de STRONG em waves altas
+                                type = ENEMY_TYPE_STRONG;
+                            else if (chance > 45 - currentWave * 2) // Mais chance de FAST em waves altas
+                                type = ENEMY_TYPE_FAST;
+                            SpawnEnemy(enemies, spawnPos, type);
+                            enemiesSpawnedThisWave++;
+                            enemyWaveSpawnTimer = enemyWaveSpawnInterval;
+                        }
+                    }
+                    // Conta inimigos vivos
+                    enemiesAlive = 0;
+                    for (int i = 0; i < MAX_ENEMIES; i++)
+                        if (enemies[i].active)
+                            enemiesAlive++;
+                    if (enemiesAlive == 0 && enemiesSpawnedThisWave == enemiesToSpawn)
+                    {
+                        inWave = false;
+                        inPreparation = true;
+                        waveCooldownTimer = wavePrepTime;
+                    }
                 }
             }
             // --- FIM SISTEMA DE WAVES ---
@@ -486,7 +543,11 @@ int main()
             for (int i = 0; i < MAX_ENEMIES; i++)
                 if (enemies[i].active)
                 {
-                    if (enemies[i].type == ENEMY_TYPE_NORMAL)
+                    if (enemies[i].type == ENEMY_TYPE_BOSS)
+                    {
+                        DrawEnemy(enemies[i], bossFrames, bossFrameCount, WHITE); // Boss
+                    }
+                    else if (enemies[i].type == ENEMY_TYPE_NORMAL)
                     {
                         DrawEnemy(enemies[i], minionFrames, minionFrameCount, WHITE); // Normal minion
                     }
@@ -504,6 +565,23 @@ int main()
                     }
                 }
             EndMode2D();
+            // --- BARRA DE VIDA DE BOSS ---
+            for (int i = 0; i < MAX_ENEMIES; i++) {
+                if (enemies[i].active && enemies[i].type == ENEMY_TYPE_BOSS) {
+                    float barW = screenWidth * 0.7f;
+                    float barH = 32.0f;
+                    float barX = (screenWidth - barW) / 2;
+                    float barY = screenHeight / 2 + 300;
+                    float percent = (float)enemies[i].health / (float)enemies[i].maxHealth;
+                    DrawRectangle(barX, barY, barW, barH, Fade(DARKGRAY, 0.7f));
+                    DrawRectangle(barX, barY, barW * percent, barH, RED);
+                    DrawRectangleLines(barX, barY, barW, barH, BLACK);
+                    const char* bossName = "Nyxalor, o Devorador de Mundos";
+                    int nameW = MeasureText(bossName, 32);
+                    DrawText(bossName, screenWidth/2 - nameW/2, barY - 36, 32, WHITE);
+                }
+            }
+
             UIDrawHUD(&player, currentWave, enemiesAlive, waveCooldownTimer, inWave);
             UIDrawHotkeyBar(screenWidth, screenHeight, magicCooldowns, MAGIC_COUNT);
 
@@ -584,6 +662,8 @@ int main()
     UnloadTexture(obscuraIcon);
     for (int i = 0; i < 4; i++) UnloadTexture(minionFrames[i]);
     for (int i = 0; i < demonIdleFrameCount; i++) UnloadTexture(demonIdleFrames[i]);
+    for (int i = 0; i < bossFrameCount; i++) UnloadTexture(bossFrames[i]);
+    for (int i = 0; i < playerFramesCount; i++) UnloadTexture(playerFrames[i]);
     for (int i = 0; i < flameballFrameCount; i++) UnloadTexture(flameballFrames[i]);
     UnloadTexture(backGround);
     UnloadImage(icon);

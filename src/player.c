@@ -9,7 +9,7 @@ Player InitPlayer(float startX, float startY)
 {
     Player player;
     player.position = (Vector2){startX, startY};
-    player.size = (Vector2){50.0f, 50.0f};
+    player.size = (Vector2){100.0f, 100.0f};
     player.color = BLACK;
     player.speed = 200.0f;
     player.maxHealth = 100;
@@ -26,11 +26,15 @@ Player InitPlayer(float startX, float startY)
     player.levelUpTextTimer = 0.0f;
     player.levelUpArcTimer = 0.0f;
     player.levelUpArcProgress = 0.0f;
-    player.sprite = LoadTexture("assets/sprites/player.png");
     player.barrierActive = false;
-    player.attackSpeed = 600.0f; // velocidade do projétil (pixels/seg)
+    player.attackSpeed = 600.0f;
     player.attackRange = 400.0f;
     player.attackDamage = 25;
+    player.currentFrame = 0;
+    player.frameTime = 0.0f;
+    player.frameSpeed = 1.0f / 10.0f;
+    player.maxFrames = 8;
+    player.facingRight = true;
     return player;
 }
 
@@ -53,6 +57,12 @@ void HandlePlayerInput(Player *player)
         direction = Vector2Normalize(direction);
         player->position.x += direction.x * player->speed * dt;
         player->position.y += direction.y * player->speed * dt;
+        // Atualiza direção do sprite
+        if (direction.x > 0)
+            player->facingRight = true;
+        else if (direction.x < 0)
+            player->facingRight = false;
+        // Se não houve movimento horizontal, mantém a direção anterior
     }
 
     // Limita o jogador dentro do mundo maior
@@ -176,10 +186,20 @@ void UpdatePlayer(Player *player)
             player->levelUpArcProgress = 0.0f;
         }
     }
+
+    // Atualiza animação
+    player->frameTime += GetFrameTime();
+    if (player->frameTime >= player->frameSpeed)
+    {
+        player->frameTime = 0.0f;
+        player->currentFrame++;
+        if (player->currentFrame >= player->maxFrames)
+            player->currentFrame = 0;
+    }
 }
 
-// Desenha o jogador
-void DrawPlayer(Player player)
+// Desenha o jogador animado
+void DrawPlayer(Player player, Texture2D *frames, int frameCount)
 {
     if (!player.alive)
         return;
@@ -193,18 +213,23 @@ void DrawPlayer(Player player)
         }
     }
 
-    if (player.sprite.id > 0)
+    Texture2D tex = frames[player.currentFrame % frameCount];
+    Rectangle sourceRec = {0.0f, 0.0f, (float)tex.width, (float)tex.height};
+    // Fator de escala visual do sprite (ajuste conforme preferir)
+    float visualScale = 1.4f;
+    float visualW = player.size.x * visualScale;
+    float visualH = player.size.y * visualScale;
+    // Centraliza o sprite visual em relação à hitbox
+    float visualX = player.position.x - (visualW - player.size.x) / 2.0f;
+    float visualY = player.position.y - (visualH - player.size.y) / 2.0f;
+    Rectangle destRec = {visualX, visualY, visualW, visualH};
+    Vector2 origin = {0.0f, 0.0f};
+    float rotation = 0.0f;
+    if (!player.facingRight)
     {
-        Rectangle sourceRec = {0.0f, 0.0f, (float)player.sprite.width, (float)player.sprite.height};
-        Rectangle destRec = {player.position.x, player.position.y, player.size.x, player.size.y};
-        Vector2 origin = {0.0f, 0.0f};
-        float rotation = 0.0f;
-        DrawTexturePro(player.sprite, sourceRec, destRec, origin, rotation, playerDrawColor);
+        sourceRec.width = -sourceRec.width;
     }
-    else
-    {
-        DrawRectangleV(player.position, player.size, playerDrawColor);
-    }
+    DrawTexturePro(tex, sourceRec, destRec, origin, rotation, playerDrawColor);
 
     // Efeito visual da barreira: bolha translúcida
     if (player.barrierActive)
@@ -214,6 +239,8 @@ void DrawPlayer(Player player)
         Color barrierColor = (Color){80, 180, 255, 90}; // Azul claro translúcido
         DrawCircleV(center, barrierRadius, barrierColor);
     }
+
+    // DrawRectangleLines(player.position.x, player.position.y, player.size.x, player.size.y, LIME);
 }
 
 // Função para adicionar XP ao jogador
@@ -226,32 +253,37 @@ void PlayerGainXP(Player *player, int xp)
     }
     player->experience += xp;
     // Log para depuração (opcional, remover em produção)
-    // TraceLog(LOG_INFO, "Player gained %d XP. Total XP: %d", xp, player->experience); 
+    // TraceLog(LOG_INFO, "Player gained %d XP. Total XP: %d", xp, player->experience);
 }
 
-void PlayerCollectXPOrbs(Player *player, Particle *particles, int maxParticles, Enemy *enemies, int maxEnemies) {
-    for (int i = 0; i < maxParticles; i++) {
+void PlayerCollectXPOrbs(Player *player, Particle *particles, int maxParticles, Enemy *enemies, int maxEnemies)
+{
+    for (int i = 0; i < maxParticles; i++)
+    {
         // Modificado para verificar o tipo da partícula em vez da cor
-        if (particles[i].active && particles[i].type == PARTICLE_TYPE_XP_ORB) { 
+        if (particles[i].active && particles[i].type == PARTICLE_TYPE_XP_ORB)
+        {
             Vector2 playerCenter = {player->position.x + player->size.x / 2, player->position.y + player->size.y / 2};
             float dist = Vector2Distance(particles[i].position, playerCenter);
             // O raio de coleta pode ser ajustado. Usar o raio da partícula e um pouco do tamanho do jogador.
-            float collectRadius = player->size.x * 0.6f + particles[i].radius; 
-            if (dist < collectRadius) {
+            float collectRadius = player->size.x * 0.6f + particles[i].radius;
+            if (dist < collectRadius)
+            {
                 int xpGained = particles[i].xpValue; // Pega o XP do orb
-                player->experience += xpGained; 
+                player->experience += xpGained;
                 particles[i].active = false;
                 char xpText[16];
                 snprintf(xpText, sizeof(xpText), "+%d XP", xpGained);
                 UIShowFloatingMsg(xpText, particles[i].position, GOLD, 1.0f);
                 AudioPlaySound(SOUND_MAGIC_PICKUP);
-                
+
                 // Checa level up
                 int xpToNextLevel = 50 + (player->level - 1) * 35;
-                while (player->experience >= xpToNextLevel) {
+                while (player->experience >= xpToNextLevel)
+                {
                     player->experience -= xpToNextLevel;
                     PlayerLevelUp(player, enemies, maxEnemies);
-                    xpToNextLevel = 50 + (player->level - 1) * 35; 
+                    xpToNextLevel = 50 + (player->level - 1) * 35;
                 }
             }
         }

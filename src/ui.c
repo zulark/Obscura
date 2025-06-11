@@ -120,7 +120,7 @@ void UIDrawHotkeyBar(int width, int height, const float *cooldowns, int numSlots
     DrawRectangleRounded((Rectangle){x, y, barW, barH}, 0.3f, 8, Fade(BLACK, 0.7f));
     // Ícones das teclas para cada slot
     const char *slotKeys[] = {"Botão Direito", "E", "Espaço"};
-    const char *slotIcons[] = {"RMB", "E", "⎵"}; // ⎵ = espaço
+    const char *slotIcons[] = {"RMB", "E", "Espaço"}; // ⎵ = espaço
     const char *slotNames[] = {"Área", "Barreira", "Dash"};
     for (int i = 0; i < numSlots; i++)
     {
@@ -286,6 +286,9 @@ void UIDrawUpgradeMenu(const Player *player, const UpgradeMenuState *menuState)
         if (i == 3)
             DrawRectangle(itemX - 32, itemY + 8, 16, 16, GREEN);
     }
+
+    // Exemplo: espaço para indicador de boss ou botão especial futuramente
+    // if (boss está ativo) { DrawText("BOSS ATIVO!", ...); }
 }
 
 int UIHandleUpgradeMenuInput(Player *player, UpgradeMenuState *menuState)

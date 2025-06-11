@@ -10,6 +10,7 @@ typedef enum EnemyType {
     ENEMY_TYPE_NORMAL,
     ENEMY_TYPE_FAST,
     ENEMY_TYPE_STRONG,
+    ENEMY_TYPE_BOSS,
     ENEMY_TYPE_COUNT 
 } EnemyType;
 
@@ -34,6 +35,11 @@ typedef struct Enemy {
     float frameTime;
     float frameSpeed;
     int maxFrames;
+    // Campos para boss
+    float specialAttackTimer; // Timer para ataques especiais
+    int bossPhase; // Fase do boss (pode mudar padrão de ataque)
+    bool isChargingAttack; // Se está carregando ataque especial
+    float chargeProgress; // Progresso do carregamento
 } Enemy;
 
 void InitEnemies(Enemy enemies[], int maxEnemies);
