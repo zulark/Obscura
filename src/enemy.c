@@ -3,18 +3,13 @@
 #include "raymath.h"
 #include "audio.h"
 #include "particle.h"
-
+#include "ui.h"
 void InitEnemies(Enemy enemies[], int maxEnemies)
 {
     for (int i = 0; i < maxEnemies; i++)
     {
         enemies[i].active = false;
-        enemies[i].size = (Vector2){25.0f, 25.0f};
-        enemies[i].speed = 100.0f;
-        enemies[i].color = RED;
-        enemies[i].maxHealth = 10;
-        enemies[i].health = enemies[i].maxHealth;
-        enemies[i].attackDamage = 5;
+        enemies[i] = (Enemy){0};
     }
 }
 
@@ -28,7 +23,7 @@ void SpawnEnemy(Enemy enemies[], Vector2 position, EnemyType type)
             Enemy enemy = {0}; // Inicializa para zerar todos os campos
             enemy.active = true;
             enemy.position = position;
-            enemy.previousPosition = position; 
+            enemy.previousPosition = position;
             enemy.type = type;
             enemy.facingRight = (GetRandomValue(0, 1) == 1);
 
@@ -72,24 +67,6 @@ void SpawnEnemy(Enemy enemies[], Vector2 position, EnemyType type)
                 enemy.frameTime = 0.0f;
                 enemy.frameSpeed = 1.0f / 8.0f; // Animação a 8 FPS
                 enemy.maxFrames = 4;            // 4 quadros de animação
-                break;
-            case ENEMY_TYPE_BOSS:
-                enemy.size = (Vector2){256.0f, 256.0f}; // Ajuste conforme sprite
-                enemy.color = PURPLE;
-                enemy.speed = 60.0f;
-                enemy.maxHealth = 2000;
-                enemy.health = enemy.maxHealth;
-                enemy.attackDamage = 50;
-                enemy.xpReward = 1000;
-                enemy.currentFrame = 0;
-                enemy.frameTime = 0.0f;
-                enemy.frameSpeed = 1.0f / 6.0f;
-                enemy.maxFrames = 8; // Supondo 8 sprites
-                // Inicializa campos de boss
-                enemy.specialAttackTimer = 0.0f;
-                enemy.bossPhase = 1;
-                enemy.isChargingAttack = false;
-                enemy.chargeProgress = 0.0f;
                 break;
             default:
                 enemies[i].size = (Vector2){25.0f, 25.0f};
@@ -155,31 +132,6 @@ void UpdateEnemy(Enemy *enemy, Vector2 targetPosition)
         enemy->facingRight = false;
     }
     // Se não houve movimento horizontal, mantém a direção anterior
-
-    // Lógica especial para boss
-    if (enemy->type == ENEMY_TYPE_BOSS)
-    {
-        // Exemplo: timer para ataque especial
-        enemy->specialAttackTimer += GetFrameTime();
-        if (!enemy->isChargingAttack && enemy->specialAttackTimer > 3.0f)
-        {
-            enemy->isChargingAttack = true;
-            enemy->chargeProgress = 0.0f;
-            // Aqui pode iniciar animação de carregamento
-        }
-        if (enemy->isChargingAttack)
-        {
-            enemy->chargeProgress += GetFrameTime();
-            if (enemy->chargeProgress > 1.5f)
-            {
-                // Dispara ataque especial (ex: área, chuva de projéteis, etc)
-                // TODO: Implementar Spawn de partículas/projéteis/minions
-                enemy->isChargingAttack = false;
-                enemy->specialAttackTimer = 0.0f;
-            }
-        }
-        // TODO: Implementar mudança de fase, ataques diferentes, etc
-    }
 }
 
 // Aplica dano ao inimigo
@@ -197,7 +149,7 @@ void TakeDamageEnemy(Enemy *enemy, int damageDealt, Particle *particles)
         AudioPlaySound(SOUND_ENEMY_DEATH);
         Vector2 pos = {enemy->position.x + enemy->size.x / 2, enemy->position.y + enemy->size.y / 2};
         // Passa o xpReward do inimigo para o orb de XP
-        SpawnParticle(particles, PARTICLE_TYPE_XP_ORB, pos, GOLD, 12.0f, 0.0f, 0.0f, 20.0f, enemy->xpReward);
+        SpawnParticle(particles, PARTICLE_TYPE_XP_ORB, pos, SKYBLUE, 12.0f, 0.0f, 0.0f, 20.0f, enemy->xpReward);
     }
 }
 
@@ -231,7 +183,7 @@ void DrawEnemy(Enemy enemy, Texture2D *idleFrames, int idleFrameCount, Color tin
     // Desenhar hitbox para depuração (opcional)
     // DrawRectangleLines(enemy.position.x, enemy.position.y, enemy.size.x, enemy.size.y, LIME);
     // Barra de vida
-    if (enemy.health < enemy.maxHealth && enemy.type != ENEMY_TYPE_BOSS)
+    if (enemy.health < enemy.maxHealth)
     {
         int healthBarWidth = 50;
         int healthBarHeight = 5;

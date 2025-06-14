@@ -15,9 +15,16 @@ typedef struct Projectile {
     Color color;
     float maxDistance; // range máximo
     float traveledDistance; // distância já percorrida
+    float duration; // Duração do projétil (opcional para ataques especiais)
+    int currentFrame;
+    float frameTime;
+    float frameSpeed; // Velocidade da animação do projétil (frames por segundo)
+    int frameCount; // Total de frames na animação do projétil
 } Projectile;
 
-void ShootProjectile(Projectile projectiles[], int projectileIndex, Vector2 startPosition, Vector2 targetPosition, int attackDamage);
+void ShootProjectile(Projectile projectiles[], int projectileIndex, Vector2 startPosition, Vector2 targetPosition, 
+                     int attackDamage, float speed, float radius, 
+                     float maxDistance, Color color, float frameSpeed, int frameCount, float duration); // Adicionado duration aqui também
 
 void UpdateProjectile(Projectile *projectile);
 

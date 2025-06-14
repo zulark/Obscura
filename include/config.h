@@ -1,7 +1,7 @@
 #ifndef CONFIG_H
 #define CONFIG_H
-#define screenWidth 1600
-#define screenHeight 1024
+#define screenWidth 1920
+#define screenHeight 1080
 #define dt GetFrameTime()
 #define gameName "Obscura"
 #define gameVersion "0.1"
@@ -13,14 +13,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include "audio.h"
+#include "boss.h"
+#include "cursor.h"
+#include "enemy.h"
+#include "magic.h"
+#include "particle.h"
 #include "player.h"
 #include "projectile.h"
-#include "particle.h"
-#include "enemy.h"
-#include "audio.h"
-#include "cursor.h"
-#include "magic.h"
 #include "ui.h"
+#include "boss_magic.h"
+#include "boss_projectile.h"
+
 
 #define WORLD_WIDTH 3200
 #define WORLD_HEIGHT 2048

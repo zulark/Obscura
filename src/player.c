@@ -5,6 +5,7 @@
 #include <raylib.h>
 #include "audio.h"
 
+// Inicializa o jogador
 Player InitPlayer(float startX, float startY)
 {
     Player player;
@@ -27,14 +28,15 @@ Player InitPlayer(float startX, float startY)
     player.levelUpArcTimer = 0.0f;
     player.levelUpArcProgress = 0.0f;
     player.barrierActive = false;
-    player.attackSpeed = 600.0f;
-    player.attackRange = 400.0f;
+    player.attackSpeed = 500.0f;
+    player.attackRange = 200.0f;
     player.attackDamage = 25;
     player.currentFrame = 0;
     player.frameTime = 0.0f;
     player.frameSpeed = 1.0f / 10.0f;
     player.maxFrames = 8;
     player.facingRight = true;
+    player.isShooting = false;
     return player;
 }
 
@@ -76,12 +78,15 @@ void HandlePlayerInput(Player *player)
         player->position.x = WORLD_WIDTH - player->size.x;
 }
 
+// Disparo do jogador
 void PlayerTryShoot(Player *player, Projectile projectiles[], Camera2D camera)
 {
-    if (player->shootTimer > 0)
-        player->shootTimer -= GetFrameTime();
+    if (IsKeyPressed(KEY_Y))  player->isShooting = !player->isShooting; // Atalho para disparar
 
-    if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) || IsKeyDown(KEY_Q))
+    if (player->shootTimer > 0)
+        player->shootTimer -= dt; // Usando dt conforme convenção do projeto
+
+    if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) || IsKeyDown(KEY_Q) || player->isShooting)
     {
         if (player->shootTimer <= 0)
         {
@@ -93,12 +98,18 @@ void PlayerTryShoot(Player *player, Projectile projectiles[], Camera2D camera)
             {
                 if (!projectiles[i].active)
                 {
-                    ShootProjectile(projectiles, i, shootPosition, targetPosition, player->attackDamage);
-                    // projectiles[i].color = SKYBLUE;
-                    projectiles[i].speed = player->attackSpeed; // velocidade fixa do projétil
-                    projectiles[i].maxDistance = player->attackRange;
-                    projectiles[i].traveledDistance = 0.0f;
-                    AudioSetSoundVolume(SOUND_SHOOT, 0.6f);
+                    // Projetéis do jogador usam sprites de flameball (4 frames).
+                    // O número de frames deve coincidir com os assets carregados (flameballFrameCount = 4 em main.c).
+                    // Raio ajustado para 16.0f para um sprite 32x32.
+                    // Cor é WHITE para não aplicar tint em sprites pré-coloridos.
+                    // Duração é 0.0f (expira por distância ou limites da tela).
+                    ShootProjectile(projectiles, i, shootPosition, targetPosition, 
+                                    player->attackDamage,
+                                    player->attackSpeed, 16.0f,   // raio (para sprite 32x32)
+                                    player->attackRange, WHITE,   // cor (use WHITE para não aplicar tint)
+                                    10.0f, 4, 0.0f);              // frameSpeed (ex: 10 FPS), frameCount (4 para flameball)
+                    
+                    AudioSetSoundVolume(SOUND_SHOOT, 0.3f);
                     AudioPlaySound(SOUND_SHOOT);
                     break;
                 }
@@ -110,12 +121,14 @@ void PlayerTryShoot(Player *player, Projectile projectiles[], Camera2D camera)
 // Adiciona controle de dano por tipo de inimigo
 static bool enemyTypeHit[ENEMY_TYPE_COUNT] = {0};
 
+// Reseta controle de dano por tipo de inimigo
 void ResetEnemyTypeHit()
 {
     for (int i = 0; i < ENEMY_TYPE_COUNT; i++)
         enemyTypeHit[i] = false;
 }
 
+// Aplica dano ao jogador
 void TakeDamagePlayer(Player *player, int damageAmount, EnemyType type)
 {
     if (player->alive == false)
@@ -125,21 +138,32 @@ void TakeDamagePlayer(Player *player, int damageAmount, EnemyType type)
     {
         return;
     }
-    if (player->invencibilityTimer > 0.0f && enemyTypeHit[type])
+
+    // Verifica se o tipo é válido antes de acessar enemyTypeHit
+    bool validEnemyType = (type >= 0 && type < ENEMY_TYPE_COUNT);
+
+    if (player->invencibilityTimer > 0.0f && validEnemyType && enemyTypeHit[type])
         return;
+
     if (player->invencibilityTimer <= 0.0f)
     {
-        for (int i = 0; i < ENEMY_TYPE_COUNT; i++)
-            enemyTypeHit[i] = false;
+        ResetEnemyTypeHit(); // Reseta todos os tipos quando a invencibilidade acaba
     }
-    enemyTypeHit[type] = true;
+
+    if (validEnemyType)
+    {
+        enemyTypeHit[type] = true;
+    }
+    // Para tipos inválidos (ex: -1 de boss), ainda aplica dano mas não usa lógica de enemyTypeHit.
+    // Isso significa que invencibilidade geral ainda se aplica, mas não o controle por tipo.
+
     player->invencibilityTimer = 1.0f;
     if (player->health > 0)
     {
         player->health -= damageAmount;
         TraceLog(LOG_INFO, "JOGADOR tomou %d de dano, vida: %d/%d", damageAmount, player->health, player->maxHealth);
         AudioPlaySound(SOUND_PLAYER_HIT);
-        // Floating text de dano
+        // Texto flutuante de dano
         char txt[32];
         snprintf(txt, sizeof(txt), "-%d HP", damageAmount);
         float textWidth = MeasureText(txt, 22);
@@ -256,6 +280,7 @@ void PlayerGainXP(Player *player, int xp)
     // TraceLog(LOG_INFO, "Player gained %d XP. Total XP: %d", xp, player->experience);
 }
 
+// Coleta de orbes de XP pelo jogador
 void PlayerCollectXPOrbs(Player *player, Particle *particles, int maxParticles, Enemy *enemies, int maxEnemies)
 {
     for (int i = 0; i < maxParticles; i++)
@@ -272,12 +297,8 @@ void PlayerCollectXPOrbs(Player *player, Particle *particles, int maxParticles, 
                 int xpGained = particles[i].xpValue; // Pega o XP do orb
                 player->experience += xpGained;
                 particles[i].active = false;
-                char xpText[16];
-                snprintf(xpText, sizeof(xpText), "+%d XP", xpGained);
-                UIShowFloatingMsg(xpText, particles[i].position, GOLD, 1.0f);
                 AudioPlaySound(SOUND_MAGIC_PICKUP);
 
-                // Checa level up
                 int xpToNextLevel = 50 + (player->level - 1) * 35;
                 while (player->experience >= xpToNextLevel)
                 {
@@ -319,9 +340,9 @@ void PlayerLevelUp(Player *player, Enemy enemies[], int maxEnemies)
     AudioSetSoundVolume(SOUND_LEVELUP, 0.3f);
 }
 
+// Efeitos visuais de level up do jogador
 void DrawPlayerLevelUpEffects(Player *player)
 {
-    // Arco azul
     if (player->levelUpArcTimer > 0.0f)
     {
         float centerX = player->position.x + player->size.x / 2;
@@ -348,47 +369,3 @@ void DrawPlayerLevelUpEffects(Player *player)
         DrawText(txt, (int)(centerX - textWidth / 2), (int)y, fontSize, Fade(SKYBLUE, (unsigned char)(255 * alpha)));
     }
 }
-
-// Menu simples de upgrades para ser chamado entre waves
-// void PlayerUpgradeMenu(Player *player) { // This function is now deprecated and its logic will be moved to ui.c
-//     if (player->skillPoints <= 0) return;
-//     int running = 1;
-//     while (running && player->skillPoints > 0) {
-//         // Exemplo: printa no console, pode ser adaptdado para UI futuramente
-//         TraceLog(LOG_INFO, "\n--- UPGRADES DISPONÍVEIS ---");
-//         TraceLog(LOG_INFO, "Skillpoints: %d", player->skillPoints);
-//         TraceLog(LOG_INFO, "1) +20 Vida Máxima (atual: %d)", player->maxHealth);
-//         TraceLog(LOG_INFO, "2) +10 Mana Máxima (atual: %d)", player->maxMana);
-//         TraceLog(LOG_INFO, "3) -10%% no tempo entre tiros (atual: %.2fs)", player->shootCooldown);
-//         TraceLog(LOG_INFO, "4) +80 Alcance do Projétil (atual: %.0f)", player->attackRange);
-//         TraceLog(LOG_INFO, "5) Sair do menu");
-//         TraceLog(LOG_INFO, "Escolha uma opção (1-5):");
-//         int opt = 0;
-//         scanf("%d", &opt); // Para protótipo, depois trocar por UI
-//         switch(opt) {
-//             case 1:
-//                 player->maxHealth += 20;
-//                 player->health = player->maxHealth;
-//                 player->skillPoints--;
-//                 break;
-//             case 2:
-//                 player->maxMana += 10;
-//                 player->mana = player->maxMana;
-//                 player->skillPoints--;
-//                 break;
-//             case 3:
-//                 player->shootCooldown *= 0.9f; // Reduz 10% o tempo entre tiros
-//                 player->skillPoints--;
-//                 break;
-//             case 4:
-//                 player->attackRange += 80.0f;
-//                 player->skillPoints--;
-//                 break;
-//             case 5:
-//                 running = 0;
-//                 break;
-//             default:
-//                 TraceLog(LOG_INFO, "Opção inválida!");
-//         }
-//     }
-// }

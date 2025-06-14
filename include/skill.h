@@ -1,6 +1,8 @@
 #ifndef SKILL_H
 #define SKILL_H
 
+#define MAX_SKILLS 10
+
 typedef struct  Skill{
     char name[32];
     int level;

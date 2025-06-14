@@ -52,13 +52,32 @@ void UpdateParticles(Particle particles[], int maxParticles) {
 }
 
 // Desenha partículas
-void DrawParticles(Particle particles[], int maxParticles) {
+void DrawParticles(Particle particles[], int maxParticles, Texture2D gemTexture) { // Adicionada gemTexture
     for (int i = 0; i < maxParticles; i++) {
         if (particles[i].active) {
-            // Usa maxLife para o cálculo do alfa, se maxLife for maior que zero
             float alpha = (particles[i].maxLife > 0) ? (particles[i].life / particles[i].maxLife) : 1.0f;
-            Color c = Fade(particles[i].color, alpha);
-            DrawCircleV(particles[i].position, particles[i].radius, c);
+
+            if (particles[i].type == PARTICLE_TYPE_XP_ORB) {
+                // Desenhar a gema
+                float diameter = particles[i].radius * 2.0f;
+                Rectangle sourceRec = {0.0f, 0.0f, (float)gemTexture.width, (float)gemTexture.height};
+                Rectangle destRec = {
+                    particles[i].position.x - particles[i].radius, // Centraliza a sprite
+                    particles[i].position.y - particles[i].radius, // Centraliza a sprite
+                    diameter,
+                    diameter
+                };
+                DrawTexturePro(gemTexture,
+                               sourceRec,
+                               destRec,
+                               (Vector2){0, 0}, // Origem no canto superior esquerdo da destRec
+                               0.0f,
+                               Fade(WHITE, alpha)); // Usa WHITE para manter cores originais, aplica alpha
+            } else {
+                // Desenhar outras partículas como círculos (comportamento original)
+                Color c = Fade(particles[i].color, alpha);
+                DrawCircleV(particles[i].position, particles[i].radius, c);
+            }
         }
     }
 }

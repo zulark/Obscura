@@ -2,6 +2,8 @@
 #define MAGIC_H
 #include "player.h"
 #include "particle.h"
+#include "enemy.h"
+#include "boss.h"
 
 #define MAGIC_SLOT_COUNT 3
 
@@ -23,7 +25,7 @@ typedef struct {
 
 void MagicInit();
 void MagicUpdate(Player *player, Particle *particles, float *cooldowns);
-int MagicCast(Player *player, int slot, Particle *particles, Vector2 targetPos, Enemy *enemies, int maxEnemies);
+int MagicCast(Player *player, int slot, Particle *particles, Vector2 targetPos, Enemy *enemies, int maxEnemies, Boss *boss);
 int MagicIsUnlocked(int magicId);
 void MagicUnlock(int magicId);
 

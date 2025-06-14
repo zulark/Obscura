@@ -3,6 +3,8 @@
     "files.associations": {
         "*.tcss": "tailwindcss",
         "player.h": "c",
-        "raylib.h": "c"
+        "raylib.h": "c",
+        "config.h": "c",
+        "raymath.h": "c"
     }
 }

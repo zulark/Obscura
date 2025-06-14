@@ -34,6 +34,7 @@ typedef struct Player {
     float frameSpeed;
     int maxFrames;
     bool facingRight; // Novo campo para direção do sprite
+    bool isShooting;
     // struct SkillTree *skills; // Para integração futura
 } Player;
 

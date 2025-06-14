@@ -11,6 +11,8 @@ typedef enum {
     PARTICLE_TYPE_PROJECTILE_TRAIL,
     PARTICLE_TYPE_HEAL_EFFECT ,
     PARTICLE_TYPE_BARRIER_EFFECT, 
+    PARTICLE_TYPE_HIT,                // Added for general hit effects
+    PARTICLE_TYPE_BOSS_DEATH_EXPLOSION, // Added for boss death
     // Adicionar mais tipos conforme necessário
 } ParticleType;
 
@@ -33,6 +35,7 @@ typedef struct Particle {
 void InitParticles(Particle particles[], int maxParticles);
 void SpawnParticle(Particle particles[], ParticleType type, Vector2 pos, Color col, float rad, float ang, float spd, float life, int xpValue);
 void UpdateParticles(Particle particles[], int maxParticles);
-void DrawParticles(Particle particles[], int maxParticles);
+// Modificada a assinatura para incluir Texture2D para a gema
+void DrawParticles(Particle particles[], int maxParticles, Texture2D gemTexture);
 
 #endif

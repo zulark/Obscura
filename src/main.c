@@ -1,22 +1,27 @@
 #include <config.h>
-#include "boss.h"
+#define MAX_BOSS_MAGICS 32
+#define MAX_BOSS_PROJECTILES 64
 
 GameState gameState = GAME_MENU;
 
 // --- VARIÁVEIS DE WAVE ---
-int currentWave = 0; // começa em 0, só incrementa ao iniciar a primeira wave
+int currentWave = 0;
 int enemiesToSpawn = 0;
 int enemiesAlive = 0;
 bool inWave = false;
 bool inPreparation = false;
 float waveCooldownTimer = 0.0f;
-const float wavePrepTime = 15.0f; // segundos de preparação entre waves
+// segundos de preparação entre waves
+const float wavePrepTime = 15.0f;
 int enemiesSpawnedThisWave = 0;
 float enemyWaveSpawnTimer = 0.0f;
-// Ajustado para um intervalo menor para mais inimigos
-const float enemyWaveSpawnInterval = 0.35f; // tempo entre cada spawn (era 0.7f)
+// tepo de spawn entre inimigos
+const float enemyWaveSpawnInterval = 0.20f; // tempo entre cada spawn (era 0.7f)
 
-void ResetGame(Player *player, Enemy enemies[], Projectile projectiles[])
+bool bossSpawned = false;
+bool bossActive = false;
+
+void ResetGame(Player *player, Enemy enemies[], Projectile projectiles[], Particle particles[])
 {
     *player = InitPlayer(WORLD_WIDTH / 2.0f, WORLD_HEIGHT / 2.0f);
 
@@ -30,6 +35,12 @@ void ResetGame(Player *player, Enemy enemies[], Projectile projectiles[])
     {
         projectiles[i].active = false;
     }
+
+    for (int i = 0; i < MAX_PARTICLES; i++)
+    {
+        particles[i].active = false;
+    }
+
     currentWave = 0;
     enemiesToSpawn = 0;
     enemiesAlive = 0;
@@ -38,43 +49,62 @@ void ResetGame(Player *player, Enemy enemies[], Projectile projectiles[])
     waveCooldownTimer = 0.0f;
     enemiesSpawnedThisWave = 0;
     enemyWaveSpawnTimer = 0.0f;
+    bossSpawned = false;
+    bossActive = false;
 }
 
-Texture2D playerFrames[8];
-int playerFramesCount = 8;
+Texture2D bossGravityPushFrames[20];
+int bossGravityPushFrameCount = 20;
+Texture2D bossFloorDamageFrames[16];
+int bossFloorDamageFrameCount = 16;
+Texture2D bossBulletPhase2Frames[5];
+int bossBulletPhase2FrameCount = 5;
+Texture2D bossBulletFrames[5];
+int bossBulletFrameCount = 5;
 
 int main()
 {
+    // efeito de fade in/fade out do HUD
     float hudAlpha = 0.0f;
     float fadeSpeed = 2.0f;
     bool transitioningToGame = false;
     float transitionAlpha = 0.0f;
-
+    // áudio
     InitAudioDevice();
     SetMasterVolume(1.0f);
-    AudioInit(); // Inicializa o sistema de áudio
+    AudioInit();
     Music menuMusic = LoadMusicStream("assets/sounds/main_theme.mp3");
     Music gameMusic = LoadMusicStream("assets/sounds/game_theme.mp3");
+    Music bossMusic = LoadMusicStream("assets/sounds/boss_theme.mp3");
     Music gameOverMusic = LoadMusicStream("assets/sounds/game_over.mp3");
-
     PlayMusicStream(menuMusic);
 
+    // renderiza a janela e cursor
+    SetConfigFlags(FLAG_WINDOW_RESIZABLE);
     InitWindow(screenWidth, screenHeight, gameName);
+    // ToggleFullscreen();
     Image icon = LoadImage("assets/icon.png");
     SetWindowIcon(icon);
     SetTargetFPS(60);
     CursorInit();
 
+    // incializa o jogador, boss, e projeteis
     Player player = InitPlayer(WORLD_WIDTH / 2.0f, WORLD_HEIGHT / 2.0f);
+    Boss boss = InitBoss(WORLD_WIDTH / 2.0f, WORLD_HEIGHT / 2.0f);
 
     Projectile projectiles[MAX_PROJECTILES];
     InitProjectiles(projectiles, MAX_PROJECTILES);
+
+    InitBossProjectiles();
 
     Enemy enemies[MAX_ENEMIES];
     InitEnemies(enemies, MAX_ENEMIES);
 
     Particle particles[MAX_PARTICLES];
     InitParticles(particles, MAX_PARTICLES);
+
+    BossMagic bossMagic[MAX_BOSS_MAGICS];
+    InitBossMagics(bossMagic, MAX_BOSS_MAGICS);
 
     float magicCooldowns[MAGIC_COUNT] = {0};
     float slotCooldowns[MAGIC_COUNT] = {0};
@@ -86,6 +116,7 @@ int main()
     {
         stars[i] = (Vector2){GetRandomValue(0, screenWidth), GetRandomValue(0, screenHeight)};
     }
+
     // inicializa a câmera
     Camera2D camera = {0};
     camera.target = player.position;
@@ -101,54 +132,105 @@ int main()
     Texture2D tile = LoadTexture("assets/sprites/ground_64x64.png");
     Texture2D obscuraIcon = LoadTexture("assets/sprites/obscura.png");
     Texture2D backGround = LoadTexture("assets/sprites/menu/Space Background(1).png");
+    Texture2D gemSprite = LoadTexture("assets/sprites/gem.png");
 
     static UpgradeMenuState upgradeMenuState = {0, 0, 0};
     static bool upgradeMenuWasShown = false;
 
     // Carregar frames dos personagens e afins
     Texture2D demonIdleFrames[4];
-    demonIdleFrames[0] = LoadTexture("assets/sprites/demon/idle/IDLE-1.png");
-    demonIdleFrames[1] = LoadTexture("assets/sprites/demon/idle/IDLE-2.png");
-    demonIdleFrames[2] = LoadTexture("assets/sprites/demon/idle/IDLE-3.png");
-    demonIdleFrames[3] = LoadTexture("assets/sprites/demon/idle/IDLE-4.png");
+    for (int i = 0; i < 4; i++)
+    {
+        char filename[100];
+        sprintf(filename, "assets/sprites/demon/idle/IDLE-%d.png", i + 1);
+        demonIdleFrames[i] = LoadTexture(filename);
+    }
 
     Texture2D minionFrames[4];
-    minionFrames[0] = LoadTexture("assets/sprites/minion/minion-45x66-1.png");
-    minionFrames[1] = LoadTexture("assets/sprites/minion/minion-45x66-2.png");
-    minionFrames[2] = LoadTexture("assets/sprites/minion/minion-45x66-3.png");
-    minionFrames[3] = LoadTexture("assets/sprites/minion/minion-45x66-4.png");
+    for (int i = 0; i < 4; i++)
+    {
+        char filename[100];
+        sprintf(filename, "assets/sprites/minion/minion-45x66-%d.png", i + 1);
+        minionFrames[i] = LoadTexture(filename);
+    }
 
     Texture2D playerFrames[8];
-    playerFrames[0] = LoadTexture("assets/sprites/player/player-1.png");
-    playerFrames[1] = LoadTexture("assets/sprites/player/player-2.png");
-    playerFrames[2] = LoadTexture("assets/sprites/player/player-3.png");
-    playerFrames[3] = LoadTexture("assets/sprites/player/player-4.png");
-    playerFrames[4] = LoadTexture("assets/sprites/player/player-5.png");
-    playerFrames[5] = LoadTexture("assets/sprites/player/player-6.png");
-    playerFrames[6] = LoadTexture("assets/sprites/player/player-7.png");
-    playerFrames[7] = LoadTexture("assets/sprites/player/player-8.png");
+    for (int i = 0; i < 8; i++)
+    {
+        char filename[100];
+        sprintf(filename, "assets/sprites/player/player-%d.png", i + 1);
+        playerFrames[i] = LoadTexture(filename);
+    }
 
     Texture2D flameballFrames[4];
-    flameballFrames[0] = LoadTexture("assets/sprites/player/flameball/flameball-32x32-1.png");
-    flameballFrames[1] = LoadTexture("assets/sprites/player/flameball/flameball-32x32-2.png");
-    flameballFrames[2] = LoadTexture("assets/sprites/player/flameball/flameball-32x32-3.png");
-    flameballFrames[3] = LoadTexture("assets/sprites/player/flameball/flameball-32x32-4.png");
+    for (int i = 0; i < 4; i++)
+    {
+        char filename[100];
+        sprintf(filename, "assets/sprites/player/flameball/flameball-32x32-%d.png", i + 1);
+        flameballFrames[i] = LoadTexture(filename);
+    }
 
     Texture2D bossFrames[8];
-    bossFrames[0] = LoadTexture("assets/sprites/boss/boss-1.png");
-    bossFrames[1] = LoadTexture("assets/sprites/boss/boss-2.png");
-    bossFrames[2] = LoadTexture("assets/sprites/boss/boss-3.png");
-    bossFrames[3] = LoadTexture("assets/sprites/boss/boss-4.png");
-    bossFrames[4] = LoadTexture("assets/sprites/boss/boss-5.png");
-    bossFrames[5] = LoadTexture("assets/sprites/boss/boss-6.png");
-    bossFrames[6] = LoadTexture("assets/sprites/boss/boss-7.png");
-    bossFrames[7] = LoadTexture("assets/sprites/boss/boss-8.png");
-    
+    for (int i = 0; i < 8; i++)
+    {
+        char filename[100];
+        sprintf(filename, "assets/sprites/boss/boss-%d.png", i + 1);
+        bossFrames[i] = LoadTexture(filename);
+    }
+
+    Texture2D bossAttackFrames[8];
+    for (int i = 0; i < 8; i++)
+    {
+        char filename[100];
+        sprintf(filename, "assets/sprites/boss/boss-attack/mage-2-122x110-%d.png", i + 1);
+        bossAttackFrames[i] = LoadTexture(filename);
+    }
+
+    Texture2D bossPhase2Frames[8];
+    for (int i = 0; i < 8; i++)
+    {
+        char filename[100];
+        sprintf(filename, "assets/sprites/boss/boss-phase-2/mage-3-87x110-%d.png", i + 1);
+        bossPhase2Frames[i] = LoadTexture(filename);
+    }
+
+    // ataque de gravidade do boss
+    for (int i = 0; i < 20; i++)
+    {
+        char filename[100];
+        sprintf(filename, "assets/sprites/boss/boss-attack/gravity-push/Gravity-Sheet-%d.png", i + 1);
+        bossGravityPushFrames[i] = LoadTexture(filename);
+    }
+    // dano no chão do boss
+    for (int i = 0; i < 12; i++)
+    {
+        char filename[100];
+        sprintf(filename, "assets/sprites/boss/boss-attack/floor-damage/floor-damage-%d.png", i + 1);
+        bossFloorDamageFrames[i] = LoadTexture(filename);
+    }
+    // projéteis do boss fase 1
+    for (int i = 0; i < 5; i++)
+    {
+        char filename[100];
+        sprintf(filename, "assets/sprites/boss/boss-attack/bullet-phase-2/mage-bullet-13x13-%d.png", i + 1);
+        bossBulletFrames[i] = LoadTexture(filename);
+    }
+    // projéteis do boss fase 2
+
+    for (int i = 0; i < 5; i++)
+    {
+        char filename[100];
+        sprintf(filename, "assets/sprites/boss/boss-attack/bullet-phase-2/mage-bullet-13x13-%d.png", i + 1);
+        bossBulletPhase2Frames[i] = LoadTexture(filename);
+    }
+
     int demonIdleFrameCount = 4;
     int minionFrameCount = 4;
     int bossFrameCount = 8;
+    int bossPhase2FrameCount = 8;
     int playerFrameCount = 8;
     int flameballFrameCount = 4;
+
     while (!WindowShouldClose())
     {
         UpdateMusicStream(menuMusic);
@@ -203,14 +285,13 @@ int main()
             for (int i = 0; i < 100; i++)
             {
                 DrawPixelV(stars[i], WHITE);
-                stars[i].y += 0.5f;
+                stars[i].y += 1.0f;
                 if (stars[i].y > screenHeight)
                     stars[i].y = 0;
             }
+            // bounce no titulo
+            float titleOffset = sin(GetTime() * 2) * 5;
 
-            float titleOffset = sin(GetTime() * 2) * 5; // efeito de bounce
-                                                        // DrawText("OBSCURA", screenWidth / 2 - MeasureText("OBSCURA", 60) / 2, screenHeight / 2 - 100 + titleOffset, 60, Fade(PURPLE, hudAlpha));
-                                                        // Draw obscureIcon image
             if (obscuraIcon.id == 0)
                 printf("Erro ao carregar a imagem!!!");
             DrawTexture(obscuraIcon, screenWidth / 2 - obscuraIcon.width / 2, screenHeight / 2 - obscuraIcon.height / 2 - 200 - titleOffset, WHITE);
@@ -292,9 +373,14 @@ int main()
         // jogando
         case GAME_IS_PLAYING:
             StopMusicStream(menuMusic);
-            UpdateMusicStream(gameMusic);
-            SetMusicVolume(gameMusic, 0.5f);
-            SetMusicPitch(gameMusic, 0.8f);
+            if (bossActive)
+            {
+                UpdateMusicStream(bossMusic);
+            }
+            else
+            {
+                UpdateMusicStream(gameMusic);
+            }
             gameOverMusicPlayed = false;
             ClearBackground(LIGHTGRAY);
             BeginMode2D(camera);
@@ -306,11 +392,67 @@ int main()
                     DrawTexture(tile, x, y, WHITE);
                 }
             }
-            DrawPlayer(player, playerFrames, playerFramesCount);
+            // Efeito
+            DrawRectangle(0, 0, WORLD_WIDTH, WORLD_HEIGHT, Fade(BLACK, 0.70f));
+            // determina qual sprite do boss usar
+            Texture2D *currentBossFrames = bossFrames;
+            int currentBossFrameCount = bossFrameCount;
+            Color projectileTint = WHITE;
+
+            // Exibe animação de ataque SÓ quando o boss está atirando projéteis OU attackAnimTimer > 0
+            bool bossIsAttacking = false;
+            if (boss.attackAnimTimer > 0.0f)
+            {
+                bossIsAttacking = true;
+            }
+            else if (boss.phase == 1)
+            {
+                if (boss.aiState_p1 == BOSS_IA_P1_SHOOTING_BASIC || boss.aiState_p1 == BOSS_IA_P1_SHOOTING_BURST)
+                {
+                    bossIsAttacking = true;
+                }
+            }
+            // Ajuste: na fase 2, nunca troca para bossAttackFrames
+            if (boss.phase == 2)
+            {
+                currentBossFrames = bossPhase2Frames;
+                currentBossFrameCount = bossFrameCount;
+            }
+            else if (bossIsAttacking)
+            {
+                currentBossFrames = bossAttackFrames;
+                currentBossFrameCount = bossFrameCount;
+            }
+            else
+            {
+                currentBossFrames = bossFrames;
+                currentBossFrameCount = bossFrameCount;
+            }
+
+            // --- BOSS STATE MACHINE VISIBILITY ---
+            if (bossActive)
+            {
+                UpdateBoss(&boss, &player, projectiles, MAX_PROJECTILES, particles, MAX_PARTICLES);
+                if (boss.visible)
+                {
+                    DrawBoss(boss, currentBossFrames, currentBossFrameCount, WHITE);
+                }
+
+                if (boss.phase == 2 && boss.health <= 0 && !boss.isActiveInLogic)
+                {
+                    bossActive = false;
+                    inWave = false;
+                    inPreparation = true;
+                    waveCooldownTimer = wavePrepTime;
+                    player.skillPoints += 5;
+                }
+            }
+
+            DrawPlayer(player, playerFrames, playerFrameCount);
             DrawPlayerLevelUpEffects(&player);
             UpdatePlayer(&player);
             PlayerTryShoot(&player, projectiles, camera);
-            // --- MAGIC SYSTEM ---
+            // --- MAGIAS ---
             MagicUpdate(&player, particles, magicCooldowns);
             // Atualiza slotCooldowns para refletir magicCooldowns (garante sincronismo com hotkeybar)
             for (int i = 0; i < MAGIC_COUNT; i++)
@@ -327,7 +469,7 @@ int main()
             {
                 Vector2 mouseScreen = GetMousePosition();
                 Vector2 mouseWorld = GetScreenToWorld2D(mouseScreen, camera);
-                if (MagicCast(&player, 0, particles, mouseWorld, enemies, MAX_ENEMIES))
+                if (MagicCast(&player, 0, particles, mouseWorld, enemies, MAX_ENEMIES, &boss))
                     slotCooldowns[0] = slotCooldownBase[0];
             }
             // MAGIA DE DEFESA
@@ -335,7 +477,7 @@ int main()
             {
                 Vector2 mouseScreen = GetMousePosition();
                 Vector2 mouseWorld = GetScreenToWorld2D(mouseScreen, camera);
-                if (MagicCast(&player, 1, particles, mouseWorld, enemies, MAX_ENEMIES))
+                if (MagicCast(&player, 1, particles, mouseWorld, enemies, MAX_ENEMIES, &boss))
                     slotCooldowns[1] = slotCooldownBase[1];
             }
             // DASH
@@ -343,7 +485,7 @@ int main()
             {
                 Vector2 mouseScreen = GetMousePosition();
                 Vector2 mouseWorld = GetScreenToWorld2D(mouseScreen, camera);
-                if (MagicCast(&player, 2, particles, mouseWorld, enemies, MAX_ENEMIES))
+                if (MagicCast(&player, 2, particles, mouseWorld, enemies, MAX_ENEMIES, &boss))
                     slotCooldowns[2] = slotCooldownBase[2];
             }
             // Atualiza magicCooldowns para refletir slotCooldowns (garante sincronismo com hotkeybar)
@@ -352,79 +494,103 @@ int main()
                 magicCooldowns[i] = slotCooldowns[i];
             }
             for (int i = 0; i < MAX_PROJECTILES; i++)
-                UpdateProjectile(&projectiles[i]);
+            {
+                if (projectiles[i].active)
+                {
+                    UpdateProjectile(&projectiles[i]);
+                    projectileTint = projectiles[i].color;
+                    DrawProjectile(projectiles[i], flameballFrames, flameballFrameCount, projectileTint);
+                }
+            }
+
+            UpdateBossProjectiles(dt);
+            DrawBossProjectiles();
+            UpdateBossMagics(dt);
+            DrawBossMagics();
+
+            // --- COLISÃO PLAYER x BOSS PROJECTILES ---
+            for (int i = 0; i < MAX_BOSS_PROJECTILES; i++)
+            {
+                if (bossProjectiles[i].active && !bossProjectiles[i].charging)
+                {
+                    float dist = Vector2Distance(
+                        (Vector2){player.position.x + player.size.x / 2, player.position.y + player.size.y / 2},
+                        bossProjectiles[i].position);
+                    if (dist <= bossProjectiles[i].radius + player.size.x / 2 && player.invencibilityTimer <= 0)
+                    {
+                        TakeDamagePlayer(&player, bossProjectiles[i].damage, -1);
+                        bossProjectiles[i].active = false;
+                    }
+                }
+            }
+
             // --- SISTEMA DE WAVES ---
+
+            // --- SISTEMA DE WAVES ---
+            bool isBossWave = currentWave % 5 == 0;
+
             if (!inWave && !inPreparation && currentWave == 0)
             {
-                // Ao entrar no gameplay, inicia preparação
                 inPreparation = true;
                 waveCooldownTimer = wavePrepTime;
             }
-            if (inPreparation)
-            {
+
+            if (inPreparation){
                 waveCooldownTimer -= GetFrameTime();
+
                 if (waveCooldownTimer <= 0.0f)
                 {
-                    // Começa a wave
+                    // Começa nova wave
                     currentWave++;
                     inWave = true;
                     inPreparation = false;
-                    // Aumenta a base de inimigos e o multiplicador por wave
-                    enemiesToSpawn = 10 + currentWave * 5; // era 5 + currentWave * 3
-                    enemiesAlive = 0;
-                    enemiesSpawnedThisWave = 0;
+                    isBossWave = currentWave % 5 == 0;
+
+                    if (isBossWave)
+                    {
+                        StopMusicStream(gameMusic);
+                        PlayMusicStream(bossMusic);
+                        SetMusicVolume(bossMusic, 1.0f);
+                        UpdateMusicStream(bossMusic);
+                        SpawnBoss(&boss, (Vector2){WORLD_WIDTH / 2.0f - boss.size.x / 2, WORLD_HEIGHT / 4.0f});
+                        bossActive = true;
+                        bossSpawned = true;
+                        enemiesToSpawn = 0;
+                        enemiesAlive = 0;
+                        enemiesSpawnedThisWave = 0;
+                    }
+                    else
+                    {
+                        enemiesToSpawn = 10 + currentWave * 5;
+                        enemiesAlive = 0;
+                        enemiesSpawnedThisWave = 0;
+                        bossSpawned = false;
+                    }
+
                     enemyWaveSpawnTimer = 0.0f;
                     upgradeMenuWasShown = false;
                 }
                 else
                 {
-                    // Menu de upgrades disponível durante preparação
                     if (!upgradeMenuWasShown && player.skillPoints > 0)
                     {
-                        upgradeMenuState.visible = 1; // Show the upgrade menu
+                        upgradeMenuState.visible = 1;
                         upgradeMenuWasShown = true;
                     }
-                    // Handle input for the upgrade menu
                     if (upgradeMenuState.visible)
                     {
                         UIHandleUpgradeMenuInput(&player, &upgradeMenuState);
                     }
                 }
             }
+
             if (inWave)
             {
-                // --- WAVE DE BOSS ---
-                if (currentWave > 0 && currentWave % 5 == 0)
+                isBossWave = currentWave % 5 == 0;
+
+                // Bloqueia o spawn de inimigos se for wave de boss
+                if (!isBossWave && !bossActive)
                 {
-                    // Se não há boss ativo, spawna um
-                    bool bossActive = false;
-                    for (int i = 0; i < MAX_ENEMIES; i++)
-                    {
-                        if (enemies[i].active && enemies[i].type == ENEMY_TYPE_BOSS)
-                            bossActive = true;
-                    }
-                    if (!bossActive && enemiesSpawnedThisWave == 0)
-                    {
-                        Vector2 bossPos = {WORLD_WIDTH / 2 - 128, WORLD_HEIGHT / 2 - 128};
-                        InitBoss(&enemies[0], bossPos);
-                        enemiesSpawnedThisWave = 1;
-                        enemiesToSpawn = 1;
-                    }
-                    // Conta inimigos vivos
-                    enemiesAlive = 0;
-                    for (int i = 0; i < MAX_ENEMIES; i++)
-                        if (enemies[i].active)
-                            enemiesAlive++;
-                    if (enemiesAlive == 0 && enemiesSpawnedThisWave == enemiesToSpawn)
-                    {
-                        inWave = false;
-                        inPreparation = true;
-                        waveCooldownTimer = wavePrepTime;
-                    }
-                }
-                else
-                {
-                    // Spawn progressivo dos inimigos
                     if (enemiesSpawnedThisWave < enemiesToSpawn)
                     {
                         enemyWaveSpawnTimer -= GetFrameTime();
@@ -453,32 +619,42 @@ int main()
                                 }
                                 tries++;
                             } while (Vector2Distance(spawnPos, (Vector2){player.position.x + player.size.x / 2, player.position.y + player.size.y / 2}) < safeDist && tries < 10);
+
                             EnemyType type = ENEMY_TYPE_NORMAL;
                             int chance = GetRandomValue(1, 100);
-                            // Ajustar chances para balancear os tipos de inimigos com mais densidade
-                            if (chance > 70 - currentWave * 2) // Mais chance de STRONG em waves altas
+                            if (chance > 70 - currentWave * 3)
                                 type = ENEMY_TYPE_STRONG;
-                            else if (chance > 45 - currentWave * 2) // Mais chance de FAST em waves altas
+                            else if (chance > 45 - currentWave * 4)
                                 type = ENEMY_TYPE_FAST;
+
                             SpawnEnemy(enemies, spawnPos, type);
                             enemiesSpawnedThisWave++;
                             enemyWaveSpawnTimer = enemyWaveSpawnInterval;
                         }
                     }
-                    // Conta inimigos vivos
-                    enemiesAlive = 0;
-                    for (int i = 0; i < MAX_ENEMIES; i++)
-                        if (enemies[i].active)
-                            enemiesAlive++;
-                    if (enemiesAlive == 0 && enemiesSpawnedThisWave == enemiesToSpawn)
-                    {
-                        inWave = false;
-                        inPreparation = true;
-                        waveCooldownTimer = wavePrepTime;
-                    }
+                }
+
+                // Conta inimigos vivos
+                enemiesAlive = 0;
+                for (int i = 0; i < MAX_ENEMIES; i++)
+                    if (enemies[i].active)
+                        enemiesAlive++;
+
+                bool waveComplete = (enemiesAlive == 0 && enemiesSpawnedThisWave == enemiesToSpawn);
+                bool bossDefeated = isBossWave && !bossActive;
+
+                if ((isBossWave && bossDefeated) || (!isBossWave && waveComplete))
+                {
+                    inWave = false;
+                    inPreparation = true;
+                    waveCooldownTimer = wavePrepTime;
+                    bossSpawned = false;
                 }
             }
+
             // --- FIM SISTEMA DE WAVES ---
+
+            // --- ATUALIZAÇÃO E DESENHO DOS INIMIGOS ---
             for (int i = 0; i < MAX_ENEMIES; i++)
             {
                 if (enemies[i].active)
@@ -515,6 +691,7 @@ int main()
                     }
                 }
             }
+
             // --- COLISÃO JOGADOR-INIMIGO ---
             if (player.health > 0)
             {
@@ -535,29 +712,40 @@ int main()
                     }
                 }
             }
+            // --- COLISAO MAGIA DE DANO EM AREA DO BOSS ---
+            for (int i = 0; i < MAX_BOSS_MAGICS; i++)
+            {
+                if (bossMagics[i].active && !bossMagics[i].charging && bossMagics[i].frames != NULL)
+                {
+                    float dist = Vector2Distance((Vector2){player.position.x + player.size.x / 2, player.position.y + player.size.y / 2}, bossMagics[i].position);
+                    if (dist <= bossMagics[i].radius + 8.0f && player.invencibilityTimer <= 0)
+                    {
+                        TakeDamagePlayer(&player, bossMagics[i].damage, -1); // -1: dano especial
+                    }
+                }
+            }
+
+            // --- COLISÃO JOGADOR-PARTÍCULAS ---
             UpdateParticles(particles, MAX_PARTICLES);
-            PlayerCollectXPOrbs(&player, particles, MAX_PARTICLES, enemies, MAX_ENEMIES); // Add this call
-            DrawParticles(particles, MAX_PARTICLES);
+            PlayerCollectXPOrbs(&player, particles, MAX_PARTICLES, enemies, MAX_ENEMIES);
+            DrawParticles(particles, MAX_PARTICLES, gemSprite); // Passa a sprite da gema para DrawParticles
             for (int i = 0; i < MAX_PROJECTILES; i++)
                 DrawProjectile(projectiles[i], flameballFrames, flameballFrameCount, WHITE);
+            // --- DESENHO DOS INIMIGOS ---
             for (int i = 0; i < MAX_ENEMIES; i++)
                 if (enemies[i].active)
                 {
-                    if (enemies[i].type == ENEMY_TYPE_BOSS)
+                    if (enemies[i].type == ENEMY_TYPE_NORMAL)
                     {
-                        DrawEnemy(enemies[i], bossFrames, bossFrameCount, WHITE); // Boss
-                    }
-                    else if (enemies[i].type == ENEMY_TYPE_NORMAL)
-                    {
-                        DrawEnemy(enemies[i], minionFrames, minionFrameCount, WHITE); // Normal minion
+                        DrawEnemy(enemies[i], minionFrames, minionFrameCount, WHITE);
                     }
                     else if (enemies[i].type == ENEMY_TYPE_STRONG)
                     {
-                        DrawEnemy(enemies[i], minionFrames, minionFrameCount, Fade(RED, 0.7f)); // Tanque minion com efeito vermelho
+                        DrawEnemy(enemies[i], minionFrames, minionFrameCount, Fade(RED, 0.5f)); // Tanque minion com efeito vermelho
                     }
                     else if (enemies[i].type == ENEMY_TYPE_FAST)
                     {
-                        DrawEnemy(enemies[i], demonIdleFrames, demonIdleFrameCount, YELLOW); // Demon rápido
+                        DrawEnemy(enemies[i], demonIdleFrames, demonIdleFrameCount, YELLOW);
                     }
                     else // Fallback para outros tipos
                     {
@@ -566,39 +754,24 @@ int main()
                 }
             EndMode2D();
             // --- BARRA DE VIDA DE BOSS ---
-            for (int i = 0; i < MAX_ENEMIES; i++) {
-                if (enemies[i].active && enemies[i].type == ENEMY_TYPE_BOSS) {
-                    float barW = screenWidth * 0.7f;
-                    float barH = 32.0f;
-                    float barX = (screenWidth - barW) / 2;
-                    float barY = screenHeight / 2 + 300;
-                    float percent = (float)enemies[i].health / (float)enemies[i].maxHealth;
-                    DrawRectangle(barX, barY, barW, barH, Fade(DARKGRAY, 0.7f));
-                    DrawRectangle(barX, barY, barW * percent, barH, RED);
-                    DrawRectangleLines(barX, barY, barW, barH, BLACK);
-                    const char* bossName = "Nyxalor, o Devorador de Mundos";
-                    int nameW = MeasureText(bossName, 32);
-                    DrawText(bossName, screenWidth/2 - nameW/2, barY - 36, 32, WHITE);
-                }
+            if (bossActive && (boss.visible || boss.isBlinking) && boss.health > 0)
+            {
+                UIDrawBossHealthBar(&boss);
             }
 
+            // UI/HUD do jogador
             UIDrawHUD(&player, currentWave, enemiesAlive, waveCooldownTimer, inWave);
+            UIUpdateFloatingMsgs();
+            UIDrawFloatingMsgs();
             UIDrawHotkeyBar(screenWidth, screenHeight, magicCooldowns, MAGIC_COUNT);
 
-            // --- UPGRADE MENU DRAWING & INPUT (HUD ELEMENT) ---
-            if (upgradeMenuState.visible && inPreparation) // Only draw if visible and in preparation
+            // mostra o menu de upgrades se o jogador tiver pontos de skill e estiver em preparação
+            if (upgradeMenuState.visible && inPreparation)
             {
                 UIDrawUpgradeMenu(&player, &upgradeMenuState);
             }
 
-            // --- DEBUG: Exibir informações na tela ---
-            // Descomente para exibir informações de debug
-            // DrawText(TextFormat("FPS: %d", GetFPS()), 10, 10, 20, RED);
-            // DrawText(TextFormat("Posicao Jogador: (%.2f, %.2f)", player.position.x, player.position.y), 10, 40, 20, GREEN);
-            // DrawText(TextFormat("Inimigos Vivos: %d", enemiesAlive), 10, 70, 20, BLUE);
-            // DrawText(TextFormat("Onda Atual: %d", currentWave), 10, 100, 20, YELLOW);
-            // DrawText(TextFormat("Skill Points: %d", player.skillPoints), 10, 130, 20, PURPLE);
-
+            // game over ao morrer, pause no P, e pause da musica no M
             if (player.alive == false)
                 gameState = GAME_OVER;
             if (IsKeyPressed(KEY_P))
@@ -619,11 +792,7 @@ int main()
             break;
 
         case GAME_PAUSED:
-            // ClearBackground(BLACK); // Not needed if UIDrawPauseScreen handles background
-            // DrawRectangle(0, 0, screenWidth, screenHeight, Fade(BLACK, 0.5f));
-            // DrawText("PAUSE", screenWidth / 2 - MeasureText("PAUSE", 40) / 2, screenHeight / 2 - 20, 40, PURPLE);
-            // DrawText("Pressione P para continuar", screenWidth / 2 - MeasureText("Pressione P para continuar", 20) / 2, screenHeight / 2 + 20, 20, WHITE);
-            UIDrawPauseScreen(); // Call the UI function for drawing pause screen
+            UIDrawPauseScreen();
             if (IsKeyPressed(KEY_P))
                 gameState = GAME_IS_PLAYING;
             break;
@@ -634,41 +803,62 @@ int main()
                 PlayMusicStream(gameOverMusic);
                 gameOverMusicPlayed = true;
             }
-            // Não repete a música: não chama PlayMusicStream novamente enquanto gameOverMusicPlayed for true
             UpdateMusicStream(gameOverMusic);
-            SetMusicPitch(gameOverMusic, 0.9f);
-            // DrawRectangle(0, 0, screenWidth, screenHeight, Fade(BLACK, 0.5f));
-            // DrawText("GAME OVER", screenWidth / 2 - MeasureText("GAME OVER", 40) / 2, screenHeight / 2 - 20, 40, RED);
-            // DrawText("Pressione R para reiniciar", screenWidth / 2 - MeasureText("Pressione R para reiniciar", 20) / 2, screenHeight / 2 + 20, 20, WHITE);
-            UIDrawGameOver(); // Call the UI function for drawing game over screen
+            SetMusicPitch(gameOverMusic, 1.0f);
+            UIDrawGameOver();
             if (IsKeyPressed(KEY_R))
             {
-                ResetGame(&player, enemies, projectiles);
+                ResetGame(&player, enemies, projectiles, particles);
                 gameState = GAME_IS_PLAYING;
                 StopMusicStream(gameOverMusic);
                 gameOverMusicPlayed = false;
                 PlayMusicStream(gameMusic);
-                SetMusicVolume(gameMusic, 0.4f);
             }
             break;
         }
-        CursorDraw(); // Desenha o cursor customizado por cima de tudo
+        // Desenha o cursor customizado por cima de tudo
+        CursorDraw();
         EndDrawing();
-    } // Fim do while(!WindowShouldClose())
+    }
+
+    // descarrega os recursos para liberar memória
     UnloadMusicStream(menuMusic);
     UnloadMusicStream(gameMusic);
+    UnloadMusicStream(bossMusic);
     UnloadMusicStream(gameOverMusic);
     UnloadTexture(tile);
     UnloadTexture(obscuraIcon);
-    for (int i = 0; i < 4; i++) UnloadTexture(minionFrames[i]);
-    for (int i = 0; i < demonIdleFrameCount; i++) UnloadTexture(demonIdleFrames[i]);
-    for (int i = 0; i < bossFrameCount; i++) UnloadTexture(bossFrames[i]);
-    for (int i = 0; i < playerFramesCount; i++) UnloadTexture(playerFrames[i]);
-    for (int i = 0; i < flameballFrameCount; i++) UnloadTexture(flameballFrames[i]);
     UnloadTexture(backGround);
-    UnloadImage(icon);
-    AudioUnload();
-    CursorUnload();
+    UnloadTexture(gemSprite); // Descarrega a sprite da gema
+
+    ClearBossProjectiles();
+    ClearBossMagics();
+
+    for (int i = 0; i < demonIdleFrameCount; i++)
+        UnloadTexture(demonIdleFrames[i]);
+    for (int i = 0; i < minionFrameCount; i++)
+        UnloadTexture(minionFrames[i]);
+    for (int i = 0; i < playerFrameCount; i++)
+        UnloadTexture(playerFrames[i]);
+    for (int i = 0; i < flameballFrameCount; i++)
+        UnloadTexture(flameballFrames[i]);
+    for (int i = 0; i < bossFrameCount; i++)
+        UnloadTexture(bossFrames[i]);
+    for (int i = 0; i < 8; i++)
+        UnloadTexture(bossAttackFrames[i]);
+    for (int i = 0; i < 8; i++)
+        UnloadTexture(bossPhase2Frames[i]);
+
+    for (int i = 0; i < bossBulletFrameCount; i++)
+        UnloadTexture(bossBulletFrames[i]);
+    for (int i = 0; i < bossFloorDamageFrameCount; i++)
+        UnloadTexture(bossFloorDamageFrames[i]);
+    for (int i = 0; i < bossGravityPushFrameCount; i++)
+        UnloadTexture(bossGravityPushFrames[i]);
+    for (int i = 0; i < bossBulletPhase2FrameCount; i++)
+        UnloadTexture(bossBulletPhase2Frames[i]);
+
+    CloseAudioDevice();
     CloseWindow();
     return 0;
 }

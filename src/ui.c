@@ -2,8 +2,11 @@
 #include "raylib.h"
 #include <string.h>
 #include "config.h"
+#include <stdio.h> // For snprintf
 
-#define MAX_FLOATING_MSGS 8
+#define MAX_FLOATING_MSGS 10
+#define NUM_UPGRADE_OPTIONS 6
+#define MAX_UPGRADE_OPTION_TEXT_LEN 128
 
 typedef struct FloatingMsg
 {
@@ -69,11 +72,13 @@ void UIDrawHUD(const Player *player, int currentWave, int enemiesAlive, float wa
     DrawText(TextFormat("Nível: %d", player->level), xpBarX + xpBarW - 90, xpBarY - 18, 16, YELLOW);
 
     // --- SKILLPOINTS ---
-    DrawText(TextFormat("Skillpoints: %d", player->skillPoints), hudCenterX - 60, hudY + 70, 18, YELLOW);
+    DrawText(TextFormat("Skillpoints: %d", player->skillPoints), GetScreenWidth() - MeasureText(TextFormat("Skillpoints: %d", player->skillPoints), 18) - 10, GetScreenHeight()- 50, 18, LIGHTGRAY);
 
     // --- INFORMAÇÕES DA WAVE ---
     if (inWave)
     {
+        if(enemiesAlive == 0) return; 
+        
         int waveTextY = 50;
         int enemiesTextY = 80;
         const char *waveStr = TextFormat("Onda: %d", currentWave);
@@ -83,6 +88,7 @@ void UIDrawHUD(const Player *player, int currentWave, int enemiesAlive, float wa
         DrawText(waveStr, GetScreenWidth() / 2 - waveTextW / 2, waveTextY, 22, WHITE);
         DrawText(enemiesStr, GetScreenWidth() / 2 - enemiesTextW / 2, enemiesTextY, 22, WHITE);
     }
+  
     else
     {
         int prepTextY = 50;
@@ -150,31 +156,6 @@ void UIDrawHotkeyBar(int width, int height, const float *cooldowns, int numSlots
             DrawText(slotKeys[i], slotX - 4, slotY - 28, 16, YELLOW);
         }
     }
-}
-
-void UIDrawMenu(Texture2D obscuraIcon, float hudAlpha, float titleOffset)
-{
-    // Desenha estrelas caindo (pode ser movido para uma função separada se usado em outros lugares)
-    // For now, keep it here as it's specific to the main menu background in the original code
-    // Note: `stars` array would need to be managed if this function is called repeatedly without `main.c` context
-    // For simplicity, I'll assume this part of background is drawn in main.c before calling UIDrawMenu, or stars are static in ui.c
-    // Vector2 stars[100];
-    // for (int i = 0; i < 100; i++)
-    // {
-    //     stars[i] = (Vector2){GetRandomValue(0, screenWidth), GetRandomValue(0, screenHeight)};
-    // }
-
-    // for (int i = 0; i < 100; i++)
-    // {
-    //     DrawPixelV(stars[i], WHITE);
-    //     stars[i].y += 0.5f;
-    //     if (stars[i].y > screenHeight)
-    //         stars[i].y = 0;
-    // }
-
-    // DrawTexture(obscuraIcon, GetScreenWidth() / 2 - obscuraIcon.width / 2, GetScreenHeight() / 2 - obscuraIcon.height / 2 + titleOffset, WHITE);
-
-    // DrawText("Desenvolvido por Felipe", GetScreenWidth() / 2 - MeasureText("Desenvolvido por Felipe", 20) / 2, GetScreenHeight() - 60, 20, Fade(DARKGRAY, 0.8f));
 }
 
 void UIDrawGameOver()
@@ -251,14 +232,27 @@ void UIDrawUpgradeMenu(const Player *player, const UpgradeMenuState *menuState)
     DrawText(title, GetScreenWidth() / 2 - titleWidth / 2, GetScreenHeight() / 2 - 150, 40, YELLOW);
     DrawText(TextFormat("Skill Points: %d", player->skillPoints), GetScreenWidth() / 2 - MeasureText(TextFormat("Skill Points: %d", player->skillPoints), 20) / 2, GetScreenHeight() / 2 - 100, 20, WHITE);
 
-    const char *options[] = {
-        TextFormat("+20 Vida Máxima (Atual: %d)", player->maxHealth),
-        TextFormat("+10 Mana Máxima (Atual: %d)", player->maxMana),
-        TextFormat("-10%% Tempo de Recarga (Atual: %.2fs)", player->shootCooldown),
-        TextFormat("+80 Alcance de Ataque (Atual: %.0f)", player->attackRange),
-        TextFormat("+5 Dano de Ataque (Atual: %d)", player->attackDamage),
-        "Pular (Manter Pontos de Habilidade)"};
-    int numOptions = sizeof(options) / sizeof(options[0]);
+    // Gera dinamicamente o texto para cada opção de upgrade.
+    // Cada string é formatada usando snprintf para incluir o bônus da melhoria
+    // e o valor atual do atributo correspondente do jogador.
+    // As strings formatadas são armazenadas em buffers individuais (options_text_buffer)
+    // para evitar problemas de sobrescrita que ocorreriam com TextFormat em um loop.
+    char options_text_buffer[NUM_UPGRADE_OPTIONS][MAX_UPGRADE_OPTION_TEXT_LEN];
+    const char *options[NUM_UPGRADE_OPTIONS];
+
+    snprintf(options_text_buffer[0], MAX_UPGRADE_OPTION_TEXT_LEN, "+20 Vida Máxima (Atual: %d)", player->maxHealth);
+    options[0] = options_text_buffer[0];
+    snprintf(options_text_buffer[1], MAX_UPGRADE_OPTION_TEXT_LEN, "+10 Mana Máxima (Atual: %d)", player->maxMana);
+    options[1] = options_text_buffer[1];
+    snprintf(options_text_buffer[2], MAX_UPGRADE_OPTION_TEXT_LEN, "-10%% Tempo de Recarga (Atual: %.2fs)", player->shootCooldown);
+    options[2] = options_text_buffer[2];
+    snprintf(options_text_buffer[3], MAX_UPGRADE_OPTION_TEXT_LEN, "+80 Alcance de Ataque (Atual: %.0f)", player->attackRange);
+    options[3] = options_text_buffer[3];
+    snprintf(options_text_buffer[4], MAX_UPGRADE_OPTION_TEXT_LEN, "+5 Dano de Ataque (Atual: %d)", player->attackDamage);
+    options[4] = options_text_buffer[4];
+    options[5] = "Pular e manter os pontos"; // Use direct assignment for the literal string
+
+    int numOptions = NUM_UPGRADE_OPTIONS;
     int menuY = GetScreenHeight() / 2 - 30;
     int menuSpacing = 50;
 
@@ -298,19 +292,30 @@ int UIHandleUpgradeMenuInput(Player *player, UpgradeMenuState *menuState)
         menuState->visible = 0;
         return 1;
     }
-    int numOptions = 6;
     int menuY = GetScreenHeight() / 2 - 30;
     int menuSpacing = 50;
-    const char *options[] = {
-        TextFormat("+20 Vida Máxima (Atual: %d)", player->maxHealth),
-        TextFormat("+10 Mana Máxima (Atual: %d)", player->maxMana),
-        TextFormat("-10%% Tempo de Recarga (Atual: %.2fs)", player->shootCooldown),
-        TextFormat("+80 Alcance de Ataque (Atual: %.0f)", player->attackRange),
-        TextFormat("+5 Dano de Ataque (Atual: %d)", player->attackDamage),
-        "Pular e manter os pontos"};
+
+    // Gera dinamicamente o texto para cada opção de upgrade para a lógica de input.
+    // Similar à seção de desenho, isso garante que a detecção de hover e clique
+    // corresponda exatamente ao texto exibido.
+    char options_text_buffer[NUM_UPGRADE_OPTIONS][MAX_UPGRADE_OPTION_TEXT_LEN];
+    const char *options[NUM_UPGRADE_OPTIONS];
+
+    snprintf(options_text_buffer[0], MAX_UPGRADE_OPTION_TEXT_LEN, "+20 Vida Máxima (Atual: %d)", player->maxHealth);
+    options[0] = options_text_buffer[0];
+    snprintf(options_text_buffer[1], MAX_UPGRADE_OPTION_TEXT_LEN, "+10 Mana Máxima (Atual: %d)", player->maxMana);
+    options[1] = options_text_buffer[1];
+    snprintf(options_text_buffer[2], MAX_UPGRADE_OPTION_TEXT_LEN, "-10%% Tempo de Recarga (Atual: %.2fs)", player->shootCooldown);
+    options[2] = options_text_buffer[2];
+    snprintf(options_text_buffer[3], MAX_UPGRADE_OPTION_TEXT_LEN, "+80 Alcance de Ataque (Atual: %.0f)", player->attackRange);
+    options[3] = options_text_buffer[3];
+    snprintf(options_text_buffer[4], MAX_UPGRADE_OPTION_TEXT_LEN, "+5 Dano de Ataque (Atual: %d)", player->attackDamage);
+    options[4] = options_text_buffer[4];
+    options[5] = "Pular e manter os pontos"; // Use direct assignment for the literal string
+
     Vector2 mouse = GetMousePosition();
     int hovered = -1;
-    for (int i = 0; i < numOptions; ++i)
+    for (int i = 0; i < NUM_UPGRADE_OPTIONS; ++i) // Use NUM_UPGRADE_OPTIONS for the loop condition
     {
         int textWidth = MeasureText(options[i], 20);
         int textDrawX = GetScreenWidth() / 2 - textWidth / 2;
@@ -392,9 +397,49 @@ int UIHandleUpgradeMenuInput(Player *player, UpgradeMenuState *menuState)
 
 void UIDrawPauseScreen(void)
 {
-    DrawRectangle(0, 0, screenWidth, screenHeight, Fade(BLACK, 0.5f));
-    DrawText("PAUSE", screenWidth / 2 - MeasureText("PAUSE", 40) / 2, screenHeight / 2 - 20, 40, PURPLE);
-    DrawText("Pressione P para continuar", screenWidth / 2 - MeasureText("Pressione P para continuar", 20) / 2, screenHeight / 2 + 20, 20, WHITE);
+    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Fade(BLACK, 1.0f));
+    DrawText("PAUSADO", GetScreenWidth() / 2 - MeasureText("PAUSADO", 40) / 2, GetScreenHeight() / 2 - 40, 40, WHITE);
+    DrawText("Pressione P para continuar", GetScreenWidth() / 2 - MeasureText("Pressione P para continuar", 20) / 2, GetScreenHeight() / 2 + 10, 20, WHITE);
+}
+
+void UIDrawBossHealthBar(Boss *boss)
+{
+    if (!boss || boss->health <= 0) return;
+
+    // Posição e dimensões da barra de vida
+    float barWidth = GetScreenWidth() * 0.6f;
+    float barHeight = 25.0f;
+    float barX = GetScreenWidth() / 2.0f - barWidth / 2.0f;
+    // float barY = GetScreenHeight() * 0.05f; // Posição original no topo
+    // float barY = GetScreenHeight() / 2.0f + 60.0f; // Posição anterior
+    float barY = 50.0f; // Nova posição solicitada
+
+    // Nome do Boss
+    const char *bossName = "Agramor, o Cego pela Lua"; // Placeholder name
+    int bossNameFontSize = 20;
+    int bossNameWidth = MeasureText(bossName, bossNameFontSize);
+    DrawText(bossName, GetScreenWidth() / 2.0f - bossNameWidth / 2.0f, barY - bossNameFontSize - 10, bossNameFontSize, WHITE);
+
+    // Health bar background
+    DrawRectangle((int)barX, (int)barY, (int)barWidth, (int)barHeight, Fade(BLACK, 0.75f));
+
+    // Health bar foreground (current health)
+    float healthPercentage = (float)boss->health / boss->maxHealth;
+    if (healthPercentage < 0) healthPercentage = 0;
+    if (healthPercentage > 1) healthPercentage = 1;
+    float currentHealthWidth = barWidth * healthPercentage;
+    DrawRectangle((int)barX, (int)barY, (int)currentHealthWidth, (int)barHeight, MAROON);
+
+    // Border for the health bar
+    DrawRectangleLinesEx((Rectangle){barX, barY, barWidth, barHeight}, 2, Fade(DARKGRAY, 0.8f));
+
+    // Optional: Segmented look (like Dark Souls)
+    int numSegments = 20; // Number of visual segments
+    float segmentWidth = barWidth / numSegments;
+    for (int i = 1; i < numSegments; i++)
+    {
+        DrawLineV((Vector2){barX + segmentWidth * i, barY}, (Vector2){barX + segmentWidth * i, barY + barHeight}, Fade(BLACK, 0.5f));
+    }
 }
 
 // Função para desenhar um cristal facetado estilizado
