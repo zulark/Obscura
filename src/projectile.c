@@ -7,8 +7,9 @@
 void InitProjectiles(Projectile projectiles[], int maxProjectiles) {
     for (int i = 0; i < maxProjectiles; i++){
         projectiles[i].active = false;
-        projectiles[i].speed = 450.0f; // Padrão, pode ser sobrescrito por ShootProjectile
-        projectiles[i].color = DARKBLUE; // Padrão, pode ser sobrescrito por ShootProjectile
+        projectiles[i].speed = 450.0f;
+        projectiles[i].speedScalar = 0.0f;
+        projectiles[i].color = DARKBLUE;
         projectiles[i].radius = 10.0f; // Padrão, pode ser sobrescrito por ShootProjectile
         projectiles[i].maxDistance = 1000.0f; // Padrão, pode ser sobrescrito por ShootProjectile
         projectiles[i].traveledDistance = 0.0f;
@@ -42,6 +43,8 @@ void ShootProjectile(Projectile projectiles[], int projectileIndex, Vector2 star
     direction = Vector2Normalize(direction);
 
     projectiles[projectileIndex].velocity = Vector2Scale(direction, projectiles[projectileIndex].speed);
+    // Pré-calcula a magnitude uma vez no spawn para evitar sqrtf() a cada frame
+    projectiles[projectileIndex].speedScalar = Vector2Length(projectiles[projectileIndex].velocity);
 }
 
 // Atualiza projéteis
@@ -50,9 +53,9 @@ void UpdateProjectile(Projectile  *projectile){
 
     projectile->position.x += projectile->velocity.x * GetFrameTime();
     projectile->position.y += projectile->velocity.y * GetFrameTime();
-    
-    float frameDistance = Vector2Length(Vector2Scale(projectile->velocity, GetFrameTime()));
-    projectile->traveledDistance += frameDistance;
+
+    // Usa speedScalar pré-calculado: evita Vector2Length (sqrtf) a cada frame
+    projectile->traveledDistance += projectile->speedScalar * GetFrameTime();
 
     // Atualização da animação
     // Atualiza animação do projétil

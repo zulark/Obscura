@@ -57,10 +57,26 @@ Texture2D bossGravityPushFrames[20];
 int bossGravityPushFrameCount = 20;
 Texture2D bossFloorDamageFrames[16];
 int bossFloorDamageFrameCount = 16;
-Texture2D bossBulletPhase2Frames[5];
+// bossBulletPhase2Frames aponta para os mesmos assets que bossBulletFrames (sem duplicata na GPU)
+Texture2D *bossBulletPhase2Frames = NULL;
 int bossBulletPhase2FrameCount = 5;
 Texture2D bossBulletFrames[5];
 int bossBulletFrameCount = 5;
+
+// Retorna o array de frames correto para o boss sem nesting
+static Texture2D *GetBossFrames(const Boss *boss,
+                                Texture2D *idleFrames,
+                                Texture2D *attackFrames,
+                                Texture2D *phase2Frames)
+{
+    if (boss->phase == 2) return phase2Frames;
+
+    bool isAttacking = (boss->attackAnimTimer > 0.0f) ||
+                       (boss->aiState_p1 == BOSS_IA_P1_SHOOTING_BASIC) ||
+                       (boss->aiState_p1 == BOSS_IA_P1_SHOOTING_BURST);
+
+    return isAttacking ? attackFrames : idleFrames;
+}
 
 int main()
 {
@@ -208,21 +224,16 @@ int main()
         sprintf(filename, "assets/sprites/boss/boss-attack/floor-damage/floor-damage-%d.png", i + 1);
         bossFloorDamageFrames[i] = LoadTexture(filename);
     }
-    // projéteis do boss fase 1
+    // projéteis do boss (fase 1 e fase 2 usam os mesmos assets — sem duplicata na GPU)
     for (int i = 0; i < 5; i++)
     {
         char filename[100];
-        sprintf(filename, "assets/sprites/boss/boss-attack/bullet-phase-2/mage-bullet-13x13-%d.png", i + 1);
+        snprintf(filename, sizeof(filename),
+                 "assets/sprites/boss/boss-attack/bullet-phase-2/mage-bullet-13x13-%d.png", i + 1);
         bossBulletFrames[i] = LoadTexture(filename);
     }
-    // projéteis do boss fase 2
-
-    for (int i = 0; i < 5; i++)
-    {
-        char filename[100];
-        sprintf(filename, "assets/sprites/boss/boss-attack/bullet-phase-2/mage-bullet-13x13-%d.png", i + 1);
-        bossBulletPhase2Frames[i] = LoadTexture(filename);
-    }
+    // Fase 2 reutiliza o mesmo array — zero uploads extras para a GPU
+    bossBulletPhase2Frames = bossBulletFrames;
 
     int demonIdleFrameCount = 4;
     int minionFrameCount = 4;
@@ -235,39 +246,7 @@ int main()
     {
         UpdateMusicStream(menuMusic);
         SetMusicVolume(menuMusic, 0.6f);
-        // SetMusicPitch(menuMusic, 0.8f);
         static bool gameOverMusicPlayed = false;
-        // --- DEADZONE DA CÂMERA ---
-        float halfScreenW = screenWidth / 2.0f;
-        float halfScreenH = screenHeight / 2.0f;
-        float camX = camera.target.x;
-        float camY = camera.target.y;
-        float playerCenterX = player.position.x + player.size.x / 2;
-        float playerCenterY = player.position.y + player.size.y / 2;
-        // Deadzone retângulo central
-        float dzLeft = camX - deadzoneWidth / 2;
-        float dzRight = camX + deadzoneWidth / 2;
-        float dzTop = camY - deadzoneHeight / 2;
-        float dzBottom = camY + deadzoneHeight / 2;
-        // Se o player sair da deadzone, move a câmera
-        if (playerCenterX < dzLeft)
-            camX = playerCenterX + deadzoneWidth / 2;
-        if (playerCenterX > dzRight)
-            camX = playerCenterX - deadzoneWidth / 2;
-        if (playerCenterY < dzTop)
-            camY = playerCenterY + deadzoneHeight / 2;
-        if (playerCenterY > dzBottom)
-            camY = playerCenterY - deadzoneHeight / 2;
-        // Limita a câmera nas bordas do mundo
-        if (camX < halfScreenW)
-            camX = halfScreenW;
-        if (camY < halfScreenH)
-            camY = halfScreenH;
-        if (camX > WORLD_WIDTH - halfScreenW)
-            camX = WORLD_WIDTH - halfScreenW;
-        if (camY > WORLD_HEIGHT - halfScreenH)
-            camY = WORLD_HEIGHT - halfScreenH;
-        camera.target = (Vector2){camX, camY};
 
         switch (gameState)
         {
@@ -280,7 +259,7 @@ int main()
             DrawTexture(backGround, 0, 0, WHITE);
 
             if (hudAlpha < 1.0f)
-                hudAlpha += dt * fadeSpeed;
+                hudAlpha += GetFrameTime() * fadeSpeed;
 
             for (int i = 0; i < 100; i++)
             {
@@ -290,12 +269,17 @@ int main()
                     stars[i].y = 0;
             }
             // bounce no titulo
-            float titleOffset = sin(GetTime() * 2) * 5;
+            float titleOffset = (float)sin(GetTime() * 2) * 5;
 
             if (obscuraIcon.id == 0)
                 printf("Erro ao carregar a imagem!!!");
-            DrawTexture(obscuraIcon, screenWidth / 2 - obscuraIcon.width / 2, screenHeight / 2 - obscuraIcon.height / 2 - 200 - titleOffset, WHITE);
-            DrawText("Desenvolvido por Felipe", screenWidth / 2 - MeasureText("Desenvolvido por Felipe", 20) / 2, screenHeight - 60, 20, Fade(DARKGRAY, hudAlpha));
+            DrawTexture(obscuraIcon, screenWidth / 2 - obscuraIcon.width / 2, screenHeight / 2 - obscuraIcon.height / 2 - 200 - (int)titleOffset, WHITE);
+
+            // Texto de crédito: MeasureText calculado uma única vez (string nunca muda)
+            static const char *creditText = "Desenvolvido por Felipe";
+            static int creditTextWidth = 0;
+            if (creditTextWidth == 0) creditTextWidth = MeasureText(creditText, 20);
+            DrawText(creditText, screenWidth / 2 - creditTextWidth / 2, screenHeight - 60, 20, Fade(DARKGRAY, hudAlpha));
             static int menuSelected = 0;
             const char *menuItems[] = {"Iniciar Jogo", "Sair"};
             int menuCount = 2;
@@ -374,60 +358,61 @@ int main()
         case GAME_IS_PLAYING:
             StopMusicStream(menuMusic);
             if (bossActive)
-            {
                 UpdateMusicStream(bossMusic);
-            }
             else
-            {
                 UpdateMusicStream(gameMusic);
-            }
+
             gameOverMusicPlayed = false;
+
+            // --- DEADZONE DA CÂMERA (apenas quando jogando) ---
+            {
+                float halfScreenW = screenWidth / 2.0f;
+                float halfScreenH = screenHeight / 2.0f;
+                float camX = camera.target.x;
+                float camY = camera.target.y;
+                float playerCenterX = player.position.x + player.size.x / 2;
+                float playerCenterY = player.position.y + player.size.y / 2;
+                float dzLeft   = camX - deadzoneWidth  / 2;
+                float dzRight  = camX + deadzoneWidth  / 2;
+                float dzTop    = camY - deadzoneHeight / 2;
+                float dzBottom = camY + deadzoneHeight / 2;
+                if (playerCenterX < dzLeft)  camX = playerCenterX + deadzoneWidth  / 2;
+                if (playerCenterX > dzRight) camX = playerCenterX - deadzoneWidth  / 2;
+                if (playerCenterY < dzTop)   camY = playerCenterY + deadzoneHeight / 2;
+                if (playerCenterY > dzBottom)camY = playerCenterY - deadzoneHeight / 2;
+                if (camX < halfScreenW)                camX = halfScreenW;
+                if (camY < halfScreenH)                camY = halfScreenH;
+                if (camX > WORLD_WIDTH  - halfScreenW) camX = WORLD_WIDTH  - halfScreenW;
+                if (camY > WORLD_HEIGHT - halfScreenH) camY = WORLD_HEIGHT - halfScreenH;
+                camera.target = (Vector2){camX, camY};
+            }
+
             ClearBackground(LIGHTGRAY);
             BeginMode2D(camera);
-            // Fundo tileado
-            for (int x = 0; x < WORLD_WIDTH; x += tile.width)
+
+            // --- FUNDO TILEADO COM FRUSTUM CULLING ---
             {
-                for (int y = 0; y < WORLD_HEIGHT; y += tile.height)
-                {
-                    DrawTexture(tile, x, y, WHITE);
-                }
+                int tileW = tile.width;
+                int tileH = tile.height;
+                int startX = ((int)(camera.target.x - screenWidth  / 2.0f) / tileW) * tileW;
+                int startY = ((int)(camera.target.y - screenHeight / 2.0f) / tileH) * tileH;
+                int endX   = (int)(camera.target.x + screenWidth  / 2.0f) + tileW;
+                int endY   = (int)(camera.target.y + screenHeight / 2.0f) + tileH;
+                if (startX < 0)            startX = 0;
+                if (startY < 0)            startY = 0;
+                if (endX > WORLD_WIDTH)    endX   = WORLD_WIDTH;
+                if (endY > WORLD_HEIGHT)   endY   = WORLD_HEIGHT;
+                for (int x = startX; x < endX; x += tileW)
+                    for (int y = startY; y < endY; y += tileH)
+                        DrawTexture(tile, x, y, WHITE);
             }
             // Efeito
             DrawRectangle(0, 0, WORLD_WIDTH, WORLD_HEIGHT, Fade(BLACK, 0.70f));
-            // determina qual sprite do boss usar
-            Texture2D *currentBossFrames = bossFrames;
+
+            // determina qual sprite do boss usar (lógica extraída para GetBossFrames)
+            Texture2D *currentBossFrames = GetBossFrames(&boss, bossFrames, bossAttackFrames, bossPhase2Frames);
             int currentBossFrameCount = bossFrameCount;
             Color projectileTint = WHITE;
-
-            // Exibe animação de ataque SÓ quando o boss está atirando projéteis OU attackAnimTimer > 0
-            bool bossIsAttacking = false;
-            if (boss.attackAnimTimer > 0.0f)
-            {
-                bossIsAttacking = true;
-            }
-            else if (boss.phase == 1)
-            {
-                if (boss.aiState_p1 == BOSS_IA_P1_SHOOTING_BASIC || boss.aiState_p1 == BOSS_IA_P1_SHOOTING_BURST)
-                {
-                    bossIsAttacking = true;
-                }
-            }
-            // Ajuste: na fase 2, nunca troca para bossAttackFrames
-            if (boss.phase == 2)
-            {
-                currentBossFrames = bossPhase2Frames;
-                currentBossFrameCount = bossFrameCount;
-            }
-            else if (bossIsAttacking)
-            {
-                currentBossFrames = bossAttackFrames;
-                currentBossFrameCount = bossFrameCount;
-            }
-            else
-            {
-                currentBossFrames = bossFrames;
-                currentBossFrameCount = bossFrameCount;
-            }
 
             // --- BOSS STATE MACHINE VISIBILITY ---
             if (bossActive)
@@ -670,24 +655,18 @@ int main()
             }
             for (int i = 0; i < MAX_PROJECTILES; i++)
             {
-                if (projectiles[i].active)
+                if (!projectiles[i].active) continue; // #3: early-exit, evita loop interno desnecessário
+
+                for (int j = 0; j < MAX_ENEMIES; j++)
                 {
-                    for (int j = 0; j < MAX_ENEMIES; j++)
+                    if (!enemies[j].active) continue;
+
+                    Rectangle enemyRec = {enemies[j].position.x, enemies[j].position.y, enemies[j].size.x, enemies[j].size.y};
+                    if (CheckCollisionCircleRec(projectiles[i].position, projectiles[i].radius, enemyRec))
                     {
-                        if (enemies[j].active)
-                        {
-                            Rectangle enemyRec = {enemies[j].position.x, enemies[j].position.y, enemies[j].size.x, enemies[j].size.y};
-                            if (CheckCollisionCircleRec(projectiles[i].position, projectiles[i].radius, enemyRec))
-                            {
-                                // Passar o array de partículas para TakeDamageEnemy
-                                TakeDamageEnemy(&enemies[j], projectiles[i].damage, particles);
-                                // Remover a chamada direta para PlayerGainXP.
-                                // O XP agora é concedido pela coleta de orbs (PlayerCollectXPOrbs)
-                                // e o orb é dropado dentro de TakeDamageEnemy.
-                                projectiles[i].active = false;
-                                break;
-                            }
-                        }
+                        TakeDamageEnemy(&enemies[j], projectiles[i].damage, particles);
+                        projectiles[i].active = false;
+                        break;
                     }
                 }
             }
@@ -851,12 +830,11 @@ int main()
 
     for (int i = 0; i < bossBulletFrameCount; i++)
         UnloadTexture(bossBulletFrames[i]);
+    // bossBulletPhase2Frames aponta para bossBulletFrames — não descarregar novamente
     for (int i = 0; i < bossFloorDamageFrameCount; i++)
         UnloadTexture(bossFloorDamageFrames[i]);
     for (int i = 0; i < bossGravityPushFrameCount; i++)
         UnloadTexture(bossGravityPushFrames[i]);
-    for (int i = 0; i < bossBulletPhase2FrameCount; i++)
-        UnloadTexture(bossBulletPhase2Frames[i]);
 
     CloseAudioDevice();
     CloseWindow();

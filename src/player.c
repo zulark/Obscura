@@ -56,15 +56,14 @@ void HandlePlayerInput(Player *player)
 
     if (direction.x != 0.0f || direction.y != 0.0f)
     {
+        const float deltaTime = GetFrameTime();
         direction = Vector2Normalize(direction);
-        player->position.x += direction.x * player->speed * dt;
-        player->position.y += direction.y * player->speed * dt;
-        // Atualiza direção do sprite
+        player->position.x += direction.x * player->speed * deltaTime;
+        player->position.y += direction.y * player->speed * deltaTime;
         if (direction.x > 0)
             player->facingRight = true;
         else if (direction.x < 0)
             player->facingRight = false;
-        // Se não houve movimento horizontal, mantém a direção anterior
     }
 
     // Limita o jogador dentro do mundo maior
@@ -84,7 +83,7 @@ void PlayerTryShoot(Player *player, Projectile projectiles[], Camera2D camera)
     if (IsKeyPressed(KEY_Y))  player->isShooting = !player->isShooting; // Atalho para disparar
 
     if (player->shootTimer > 0)
-        player->shootTimer -= dt; // Usando dt conforme convenção do projeto
+        player->shootTimer -= GetFrameTime();
 
     if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) || IsKeyDown(KEY_Q) || player->isShooting)
     {
@@ -181,10 +180,12 @@ void TakeDamagePlayer(Player *player, int damageAmount, EnemyType type)
 // Atualiza lógica do jogador
 void UpdatePlayer(Player *player)
 {
+    const float deltaTime = GetFrameTime(); // capturado uma única vez
+
     HandlePlayerInput(player);
     if (player->invencibilityTimer > 0.0f)
     {
-        player->invencibilityTimer -= dt;
+        player->invencibilityTimer -= deltaTime;
         if (player->invencibilityTimer < 0.0f)
         {
             player->invencibilityTimer = 0.0f;
@@ -192,17 +193,16 @@ void UpdatePlayer(Player *player)
         }
     }
 
-    // Atualiza timers de level up
     if (player->levelUpTextTimer > 0.0f)
     {
-        player->levelUpTextTimer -= dt;
+        player->levelUpTextTimer -= deltaTime;
         if (player->levelUpTextTimer < 0.0f)
             player->levelUpTextTimer = 0.0f;
     }
+
     if (player->levelUpArcTimer > 0.0f)
     {
-        player->levelUpArcTimer -= dt;
-        // Progresso de 0.0 a 1.0
+        player->levelUpArcTimer -= deltaTime;
         player->levelUpArcProgress = 1.0f - (player->levelUpArcTimer / 0.7f);
         if (player->levelUpArcTimer < 0.0f)
         {
@@ -211,8 +211,7 @@ void UpdatePlayer(Player *player)
         }
     }
 
-    // Atualiza animação
-    player->frameTime += GetFrameTime();
+    player->frameTime += deltaTime;
     if (player->frameTime >= player->frameSpeed)
     {
         player->frameTime = 0.0f;
@@ -343,6 +342,9 @@ void PlayerLevelUp(Player *player, Enemy enemies[], int maxEnemies)
 // Efeitos visuais de level up do jogador
 void DrawPlayerLevelUpEffects(Player *player)
 {
+    if (player->levelUpArcTimer <= 0.0f && player->levelUpTextTimer <= 0.0f)
+        return; // early return: nada a desenhar
+
     if (player->levelUpArcTimer > 0.0f)
     {
         float centerX = player->position.x + player->size.x / 2;
@@ -354,18 +356,20 @@ void DrawPlayerLevelUpEffects(Player *player)
         for (int i = 0; i < arcCount; i++)
         {
             float startAngle = 120.0f * i + player->levelUpArcProgress * 60.0f;
-            DrawRing((Vector2){centerX, centerY}, radius, radius + 6, startAngle, startAngle + 60, 64, Fade(BLUE, 180));
+            // Corrigido: Fade() espera alpha de 0.0f a 1.0f; 180/255.0f ≈ 0.71 (translúcido)
+            DrawRing((Vector2){centerX, centerY}, radius, radius + 6, startAngle, startAngle + 60, 64, Fade(BLUE, 180.0f / 255.0f));
         }
     }
-    // Texto
+
     if (player->levelUpTextTimer > 0.0f)
     {
+        static const char *txt = "LEVEL UP!";
+        static int textWidth = 0;
+        if (textWidth == 0) textWidth = MeasureText(txt, 32); // calculado uma única vez
+
         float alpha = (player->levelUpTextTimer > 0.3f) ? 1.0f : player->levelUpTextTimer / 0.3f;
-        int fontSize = 32;
-        const char *txt = "LEVEL UP!";
-        int textWidth = MeasureText(txt, fontSize);
         float centerX = player->position.x + player->size.x / 2;
         float y = player->position.y - 32 - (1.0f - alpha) * 20.0f;
-        DrawText(txt, (int)(centerX - textWidth / 2), (int)y, fontSize, Fade(SKYBLUE, (unsigned char)(255 * alpha)));
+        DrawText(txt, (int)(centerX - textWidth / 2), (int)y, 32, Fade(SKYBLUE, alpha));
     }
 }

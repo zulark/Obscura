@@ -95,43 +95,35 @@ void UpdateEnemy(Enemy *enemy, Vector2 targetPosition)
     if (!enemy->active)
         return;
 
-    enemy->previousPosition = enemy->position; // Guarda a posição antes de mover
+    const float deltaTime = GetFrameTime(); // capturado uma única vez
 
-    // Movimento em direção ao jogador
+    enemy->previousPosition = enemy->position;
+
     Vector2 direction = Vector2Subtract(targetPosition, enemy->position);
     float distance = Vector2Length(direction);
     if (distance > 0)
-    { // Evita divisão por zero se já estiver no destino
+    {
         direction = Vector2Normalize(direction);
-        enemy->position.x += direction.x * enemy->speed * GetFrameTime();
-        enemy->position.y += direction.y * enemy->speed * GetFrameTime();
+        enemy->position.x += direction.x * enemy->speed * deltaTime;
+        enemy->position.y += direction.y * enemy->speed * deltaTime;
     }
 
-    // Atualiza a animação para inimigos que a possuem (maxFrames > 0)
     if (enemy->maxFrames > 0)
     {
-        enemy->frameTime += GetFrameTime();
+        enemy->frameTime += deltaTime;
         if (enemy->frameTime >= enemy->frameSpeed)
         {
             enemy->frameTime = 0.0f;
             enemy->currentFrame++;
             if (enemy->currentFrame >= enemy->maxFrames)
-            {
                 enemy->currentFrame = 0;
-            }
         }
     }
 
-    // Atualiza a direção do inimigo com base no movimento
     if (enemy->position.x > enemy->previousPosition.x)
-    {
         enemy->facingRight = true;
-    }
     else if (enemy->position.x < enemy->previousPosition.x)
-    {
         enemy->facingRight = false;
-    }
-    // Se não houve movimento horizontal, mantém a direção anterior
 }
 
 // Aplica dano ao inimigo
