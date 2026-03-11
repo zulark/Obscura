@@ -2,6 +2,8 @@
 # Obscura
 
 Obscura é um jogo top-down em C, usando Raylib, com inspiração em Darksouls e Vampire Survivors. Projeto inicialmente voltado para a matéria de Programação Avançada.
+<img width="1594" height="893" alt="image" src="https://github.com/user-attachments/assets/c0d8e366-9b63-432b-a614-873879df6c04" />
+
 
 ## Funcionalidades
 
@@ -16,16 +18,24 @@ Obscura é um jogo top-down em C, usando Raylib, com inspiração em Darksouls e
     - Escala visual do sprite do jogador ajustável (via `visualScale`), permitindo que o visual seja maior que a hitbox para melhor estética, mantendo a hitbox precisa para colisões.
     - Ataque básico (clique esquerdo).
     - Hitbox do jogador visível para debug (opcional).
+<img width="1573" height="909" alt="image" src="https://github.com/user-attachments/assets/82f9fe54-8c82-4728-9670-40bdf8873d83" />
+
 - **Inimigos:**
     - Tipos variados (NORMAL, FAST, STRONG) com comportamentos distintos.
     - Spawn probabilístico e estratégico (fora da área visível/andável).
     - Perseguição inteligente ao jogador.
+ 
+    
 - **Sistema de Progressão:**
     - Ganho de XP ao derrotar inimigos.
     - Sistema de Nível (Level Up) que aumenta atributos do jogador.
     - Skill points para customização (mecânica a ser expandida).
     - Floating text para feedback de XP ganho.
     - Efeito visual e sonoro de level up, com ataque circular e invencibilidade temporária.
+ 
+      
+<img width="1593" height="863" alt="image" src="https://github.com/user-attachments/assets/e3da1e31-18fe-44ae-9e15-1d1e9aae7914" />
+
 - **Combate e Magias:**
     - Hotkey bar para acesso rápido a magias (slots 1,2,3) com feedback visual de cooldown.
     - Magias implementadas: Ataque em Área (clique direito), Barreira (E), Dash (Espaço).
