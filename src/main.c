@@ -5,7 +5,7 @@
 GameState gameState = GAME_MENU;
 
 // --- VARIÁVEIS DE WAVE ---
-int currentWave = 0;
+int currentWave = 4;
 int enemiesToSpawn = 0;
 int enemiesAlive = 0;
 bool inWave = false;
@@ -103,8 +103,7 @@ int main()
     Particle particles[MAX_PARTICLES];
     InitParticles(particles, MAX_PARTICLES);
 
-    BossMagic bossMagic[MAX_BOSS_MAGICS];
-    InitBossMagics(bossMagic, MAX_BOSS_MAGICS);
+    InitBossMagics();
 
     float magicCooldowns[MAGIC_COUNT] = {0};
     float slotCooldowns[MAGIC_COUNT] = {0};

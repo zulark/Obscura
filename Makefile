@@ -1,5 +1,8 @@
 # Makefile Completo e Organizado
 
+SHELL := C:/msys64/usr/bin/sh.exe
+export PATH := C:/msys64/ucrt64/bin:C:/msys64/usr/bin:$(PATH)
+
 # Nome do seu executável (sem a extensão .exe)
 TARGET_EXEC := Obscura
 
@@ -28,7 +31,7 @@ else
 endif
 
 # Flags para o linker (se houver alguma específica além das libs)
-LDFLAGS :=
+LDFLAGS := -Llib
 
 # Bibliotecas para linkar (Raylib e suas dependências no MinGW)
 LDLIBS := -lraylib -lopengl32 -lgdi32 -lwinmm
@@ -58,17 +61,18 @@ all: $(EXECUTABLE)
 
 # Regra para criar o executável
 $(EXECUTABLE): $(OBJECTS) $(RES_FILE)
-	@mkdir -p $(BIN_DIR) # Cria a pasta bin/ se não existir
+	@mkdir -p $(BIN_DIR)
 	@echo "Modo de Build: $(BUILD_MODE_MSG)"
 	@echo "Linkando para criar $(EXECUTABLE)..."
 	$(CC) $(OBJECTS) $(RES_FILE) -o $@ $(LDFLAGS) $(LDLIBS)
-	@echo "Compilação concluída! Executável: $@"
+	@cp -u lib/libraylib.dll $(BIN_DIR)/
+	@echo "Compilacao concluida! Executavel: $@"
 
 # Regra para compilar arquivos .c em arquivos objeto .o
 # $< é o nome do primeiro pré-requisito (o arquivo .c fonte)
 # $@ é o nome do alvo (o arquivo .o de saída)
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
-	@mkdir -p $(OBJ_DIR) # Cria a pasta obj/ se não existir
+	@mkdir -p $(OBJ_DIR)
 	@echo "Compilando $< -> $@"
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -82,11 +86,7 @@ clean:
 	@echo "Limpando arquivos de build..."
 	rm -f $(OBJ_DIR)/*.o
 	rm -f $(EXECUTABLE)
-	# Para ser mais completo, você pode querer remover as pastas obj e bin
-	# Cuidado ao usar 'rm -rf'
-	# @-rmdir $(OBJ_DIR) 2>/dev/null || true
-	# @-rmdir $(BIN_DIR) 2>/dev/null || true
-	@echo "Limpeza concluída."
+	@echo "Limpeza concluida."
 
 # Regra para compilar em modo Release
 release:
